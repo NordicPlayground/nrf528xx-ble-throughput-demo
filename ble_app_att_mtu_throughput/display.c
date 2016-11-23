@@ -71,6 +71,8 @@
 
 #endif
 
+static bool m_display_connected = false;
+
 static const uint32_t nordic_logo_image[((80 - 1) / 32 + 1) * 41] =
 {
 0x1C000700, 0x00000000, 0x00000000, 0xF6000F80, 0x00000000, 0x00000000, 0xF7007FF0, 0x00000001,
@@ -169,11 +171,20 @@ void m_mlcd_shield_demo2(void)
     }
 }
 
-void display_init()
+bool display_init()
 {
+	uint32_t ret_code;
+	
 	drv_23lcv_init();
 
-    drv_pca63520_io_init(&drv_pca63520_io_cfg);
+    ret_code = drv_pca63520_io_init(&drv_pca63520_io_cfg);
+	
+	if(ret_code != DRV_PCA63520_IO_STATUS_CODE_SUCCESS)
+	{
+		m_display_connected = false;
+		return false;
+	}
+	
     drv_mlcd_init(&drv_mlcd_cfg);
     drv_vlcd_init(&drv_vlcd_cfg);
 
@@ -181,20 +192,31 @@ void display_init()
     NVIC_EnableIRQ(TIMER2_IRQn);
 	
 	drv_pca63520_io_disp_pwr_mode_cfg(DRV_PCA63520_IO_DISP_PWR_MODE_ENABLED);
+	
     drv_pca63520_io_disp_mode_cfg(DRV_PCA63520_IO_DISP_MODE_ON);
+	
     drv_mlcd_clear();
     drv_vlcd_clear(DRV_VLCD_COLOR_WHITE);
+	m_display_connected = true;
+	return true;
 }
 
 void display_test()
 {
 	display_init();
-	
+	if(!m_display_connected)
+	{
+		return;
+	}
 	m_mlcd_shield_demo2();
 }
 
 void display_show()
 {
+	if(!m_display_connected)
+	{
+		return;
+	}
 	drv_vlcd_update();
     
 	pca63520_util_vlcd_mlcd_sync();
@@ -205,201 +227,62 @@ static uint8_t line_counter = 0;
 
 void display_clear()
 {
+	if(!m_display_connected)
+	{
+		return;
+	}
 	line_counter = 0;
 	fb_reset(FB_COLOR_WHITE);
+	display_draw_nordic_logo();
 }
 
-void display_print_line_inc(char * line, uint32_t x_pos)
+//TODO: print multiple lines i line exceeds width of display
+void display_print_line_inc(char * line)
 {
+	if(!m_display_connected)
+	{
+		return;
+	}
 	if(line_counter < 9)
 	{
-		fb_string_put(x_pos, line_counter * TEXT_HEIGHT, line, FB_COLOR_BLACK);
+		fb_string_put(0, line_counter * TEXT_HEIGHT, line, FB_COLOR_BLACK);
 		line_counter ++;
 	}
 }
 
 void display_print_line(char * line, uint32_t x_pos, uint8_t line_nr)
 {
+	if(!m_display_connected)
+	{
+		return;
+	}
 	fb_string_put(x_pos, line_nr * TEXT_HEIGHT, line, FB_COLOR_BLACK);
-}
-
-uint8_t display_line_nr_get()
-{
-	return line_counter;
 }
 
 void display_draw_nordic_logo()
 {
+	if(!m_display_connected)
+	{
+		return;
+	}
 	fb_bitmap_put(400-(80+10), 0, &(nordic_logo_image[0]), 80, 41, FB_COLOR_BLACK);
-}
-
-void display_draw_button_description()
-{
-	uint32_t x_pos = 310;
-	
-	display_print_line("Button", x_pos, 2);
-	display_print_line("Desc:", x_pos, 3);
-	#if defined(NRF52840_XXAA)
-	display_print_line("b1: Enter", x_pos, 4);
-	display_print_line("b2: Sel", x_pos, 5);
-	display_print_line("b3: Back", x_pos, 6);
-	#elif defined(NRF52)
-	display_print_line("7: Enter", x_pos, 4);
-	display_print_line("5: Sel", x_pos, 5);
-	display_print_line("11: Back", x_pos, 6);
-	#endif
-	
-	
-	fb_line(305, 0, 305, TEXT_HEIGHT*7, FB_COLOR_BLACK);
-	fb_line(305, TEXT_HEIGHT*7, 400, TEXT_HEIGHT*7, FB_COLOR_BLACK);
-}
-
-void display_draw_configuration(test_params_t *test_params)
-{
-	char str[50];
-	//display_print_line_inc("Current test configuration:", 0);
-	
-	sprintf(str, "ATT MTU size: %d bytes", test_params->att_mtu);
-	display_print_line_inc(str, 0);
-	
-    sprintf(str, "Conn. interval: %.2f ms", (float)test_params->conn_interval * 1.25);
-	display_print_line_inc(str, 0);
-    
-	sprintf(str, "Data length extension (DLE): %s", test_params->data_len_ext_enabled ?
-                 (uint32_t)"ON" :
-                 (uint32_t)"OFF");
-	display_print_line_inc(str, 0);
-	
-    sprintf(str, "Conn. event length ext.: %s", test_params->conn_evt_len_ext_enabled ?
-                 (uint32_t)"ON" :
-                 (uint32_t)"OFF");
-	display_print_line_inc(str, 0);
-}
-
-void display_draw_sender_screen(uint8_t pointer_position, test_params_t *test_params)
-{
-	display_clear();
-	
-	display_draw_nordic_logo();
-	display_draw_button_description();
-	display_draw_configuration(test_params);
-	
-	line_counter++;
-	
-	display_print_line_inc("Select and option:", 0);
-	display_print_line_inc("Run test", TEXT_INLINE);
-	display_print_line_inc("Adjust test parameters", TEXT_INLINE);
-	
-	//pointer_position = display_line_nr_get() - 1;
-	display_print_line(">", 0, line_counter - 2 + pointer_position);
-	
-	display_show();
-}
-
-void display_draw_init_screen(uint8_t pointer_position)
-{
-	display_clear();
-	
-	display_draw_nordic_logo();
-	display_draw_button_description();
-	
-	display_print_line_inc("Select role", TEXT_INLINE);
-	display_print_line_inc("Sender", TEXT_INLINE);
-	display_print_line_inc("Receiver", TEXT_INLINE);
-	display_print_line(">", 0, line_counter - 2 + pointer_position);
-	display_show();
-}
-
-void display_draw_config_screen(uint8_t pointer_position, test_params_t *test_params)
-{
-	display_clear();
-	
-	display_draw_nordic_logo();
-	display_draw_button_description();
-	display_draw_configuration(test_params);
-	
-	line_counter++;
-	
-	display_print_line_inc("Adjust test parameters:", 0);
-	display_print_line(">", 0, line_counter + pointer_position);
-	
-	display_print_line_inc("Select ATT MTU size.", TEXT_INLINE);
-	display_print_line_inc("Select connection interval.", TEXT_INLINE);
-	display_print_line_inc("Turn on/off Data length extension (DLE).", TEXT_INLINE);
-	
-	display_show();
-}
-
-void display_draw_config_mtu_screen(uint8_t pointer_position, test_params_t *test_params)
-{
-	display_clear();
-	
-	display_draw_nordic_logo();
-	display_draw_button_description();
-	display_draw_configuration(test_params);
-	
-	line_counter++;
-	
-	display_print_line_inc("Select an ATT MTU size:", 0);
-	display_print_line(">", 0, line_counter + pointer_position);
-	
-	display_print_line_inc("23 bytes.", TEXT_INLINE);
-	display_print_line_inc("158 bytes.", TEXT_INLINE);
-	display_print_line_inc("247 bytes.", TEXT_INLINE);
-	
-	display_show();
-}
-
-void display_draw_config_conn_int_screen(uint8_t pointer_position, test_params_t *test_params)
-{
-	display_clear();
-	
-	display_draw_nordic_logo();
-	display_draw_button_description();
-	display_draw_configuration(test_params);
-	
-	line_counter++;
-	
-	display_print_line_inc("Select a connection interval:", 0);
-	display_print_line(">", 0, line_counter + pointer_position);
-	
-	display_print_line_inc("7.5 ms.", TEXT_INLINE);
-	display_print_line_inc("50 ms.", TEXT_INLINE);
-	display_print_line_inc("400 ms.", TEXT_INLINE);
-	
-	display_show();
-}
-
-void display_draw_config_dle_screen(uint8_t pointer_position, test_params_t *test_params)
-{
-	display_clear();
-	
-	display_draw_nordic_logo();
-	display_draw_button_description();
-	display_draw_configuration(test_params);
-	
-	line_counter++;
-	
-	display_print_line_inc("Turn on Data Length Extension?", 0);
-	display_print_line(">", 0, line_counter + pointer_position);
-	
-	display_print_line_inc("Yes.", TEXT_INLINE);
-	display_print_line_inc("No.", TEXT_INLINE);
-	
-	display_show();
-}
-
-void display_draw_receiver_screen()
-{
-	display_clear();
-	
-	display_show();
 }
 
 void display_draw_test_run_screen(transfer_data_t *transfer_data)
 {
+	if(!m_display_connected)
+	{
+		return;
+	}
 	static float last_timems = 0;
 	static uint16_t last_kB_transferred = 0;
+	
+	if(transfer_data->kB_transfered == 1)
+	{
+		//first time the function is called during a transfer
+		last_timems = 0;
+		last_kB_transferred = 0;
+	}
 	
 	float throughput = 0;
 	float timems = (float)(counter_get());
@@ -414,7 +297,7 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	
 	display_clear();
 	
-	display_print_line_inc("Transferring data:", 0);
+	display_print_line_inc("Transferring data:");
 	
 	//print filled bar
 	fb_rectangle(0, line_counter*TEXT_HEIGHT, TRANSFER_BAR_LENGTH, line_counter*2*TEXT_HEIGHT-1, FB_COLOR_BLACK);
@@ -424,17 +307,11 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	
 	char str[50];
 	sprintf(str, "%dKB/%dKB transferred", transfer_data->kB_transfered, transfer_data->kb_transfer_size);
-	display_print_line_inc(str, 0);
+	display_print_line_inc(str);
 	
 	//display_print_line("kbit/s", 150, line_counter);
 	sprintf(str, "Speed: %.1f Kbits/s", throughput);
-	display_print_line_inc(str, 0);
+	display_print_line_inc(str);
 	
-	display_show();
-}
-
-void display_draw_test_start_screen()
-{
-	display_clear();
 	display_show();
 }

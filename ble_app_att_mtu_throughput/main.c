@@ -39,12 +39,11 @@
 #include "app_error.h"
 #include "ble_conn_params.h"
 
-#include "display.h"
-
 #define NRF_LOG_MODULE_NAME "DEMO"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
+#include "display.h"
 
 #define TIMER_PRESCALER         0                                   /**< Value of the RTC1 PRESCALER register. */
 #define TIMER_OP_QUEUE_SIZE     4                                   /**< Size of timer operation queues. */
@@ -73,17 +72,6 @@
 #define FOUR    '4'
 #define ENTER   '\r'
 
-#ifdef NRF52840_XXAA
-#define BUTTON_SEL				  BUTTON_2
-#define BUTTON_ENTER			  BUTTON_1
-#define BUTTON_BACK				  BUTTON_3
-#endif
-
-#ifdef NRF52832
-#define BUTTON_SEL				  5
-#define BUTTON_ENTER			  7
-#define BUTTON_BACK				  11
-#endif
 
 #define BUTTON_DETECTION_DELAY    APP_TIMER_TICKS(50, TIMER_PRESCALER)       /**< Delay from a GPIOTE event until a button is reported as pushed (in number of timer ticks). */
 
@@ -99,6 +87,43 @@ typedef enum
     BOARD_DUMMY,
 } board_role_t;
 
+
+//TODO: this is now in display.h, needs to be moved
+//typedef struct
+//{
+//    uint16_t att_mtu;                   /**< GATT ATT MTU, in bytes. */
+//    uint16_t conn_interval;             /**< Connection interval expressed in units of 1.25 ms. */
+//    bool     data_len_ext_enabled;      /**< Data length extension status. */
+//    bool     conn_evt_len_ext_enabled;  /**< Connection event length extension status. */
+//} test_params_t;
+
+static void button_event_handler(uint8_t pin_no, uint8_t button_action);
+
+#ifdef NRF52832
+//Display will occupy the buttons on nRF52 DK, move the button input pins
+static app_button_cfg_t buttons_display_pca10040[] =
+{
+	{5, false, BUTTON_PULL, button_event_handler},
+	{7,  false, BUTTON_PULL, button_event_handler},
+	{11,  false, BUTTON_PULL, button_event_handler},
+	{12,  false, BUTTON_PULL, button_event_handler}
+};
+#endif
+	
+static app_button_cfg_t buttons[] =
+{
+	{BUTTON_1, false, BUTTON_PULL, button_event_handler},
+	{BUTTON_2,  false, BUTTON_PULL, button_event_handler},
+	{BUTTON_3,  false, BUTTON_PULL, button_event_handler},
+	{BUTTON_4,  false, BUTTON_PULL, button_event_handler}
+};
+
+uint8_t m_button = 0xff;
+
+static volatile bool 			m_display_show = false;
+static volatile bool 			m_display_show_transfer_data = false;
+static volatile bool			m_transfer_done = false;
+static transfer_data_t			m_transfer_data = {.kb_transfer_size = (AMT_BYTE_TRANSFER_CNT/1024), .kB_transfered = 0};
 
 /**@brief Variable length data encapsulation in terms of length and pointer to data. */
 typedef struct
@@ -122,29 +147,6 @@ static ble_db_discovery_t        m_ble_db_discovery;    /**< Structure used to i
 
 static nrf_ble_amtc_t            m_amtc;
 static nrf_ble_amts_t            m_amts;
-
-typedef enum
-{
-	INIT,
-	RECEIVER,
-	SENDER,
-	CONFIG,
-	CONFIG_MTU,
-	CONFIG_CONN_INT,
-	CONFIG_DLE,
-	TEST_BEGIN,
-	TEST_RUN,
-}
-state_t;
-
-static state_t state = INIT;
-static uint8_t pointer_position = 0;
-static volatile uint8_t button_pushed = 0xff;
-
-static volatile bool 			m_display_show = false;
-static volatile bool 			m_display_show_transfer_data = false;
-static volatile bool			m_transfer_done = false;
-static transfer_data_t			m_transfer_data = {.kb_transfer_size = (AMT_BYTE_TRANSFER_CNT/1024), .kB_transfered = 0};
 
 /* Name to use for advertising and connection. */
 static const char m_target_periph_name[] = DEVICE_NAME;
@@ -181,6 +183,8 @@ static ble_gap_conn_params_t m_conn_param =
 
 void advertising_start(void);
 void scan_start(void);
+void test_params_print(void);
+void display_test_params_print(void);
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -220,6 +224,11 @@ static void timer_init(void)
     APP_TIMER_INIT(TIMER_PRESCALER, TIMER_OP_QUEUE_SIZE, false);
 }
 
+static void wait_for_event(void)
+{
+    (void) sd_app_evt_wait();
+}
+
 
 /**@brief Function for initializing GAP parameters.
  *
@@ -243,15 +252,78 @@ static void gap_params_init(void)
 
 }
 
+/**@brief Function for handling events from the button handler module.
+ *
+ * @param[in] pin_no        The pin that the event applies to.
+ * @param[in] button_action The button action (press/release).
+ */
+static void button_event_handler(uint8_t pin_no, uint8_t button_action)
+{
+	if(button_action == APP_BUTTON_PUSH)
+	{
+		m_button = pin_no;
+	}
+}
+
+/**@brief Function for initializing the button library.
+ */
+static void buttons_init(app_button_cfg_t *btns)
+{
+    uint32_t err_code;
+	
+    err_code = app_button_init(btns, ARRAY_SIZE(buttons), BUTTON_DETECTION_DELAY);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for enabling button input.
+ */
+static void buttons_enable(void)
+{
+    ret_code_t err_code;
+    err_code = app_button_enable();
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for disabling button input.
+ */
+static void buttons_disable(void)
+{
+    ret_code_t err_code;
+    err_code = app_button_disable();
+    APP_ERROR_CHECK(err_code);
+}
+
+uint8_t button_read(void)
+{
+	m_button = 0xff;
+    buttons_enable();
+
+    while (m_button == 0xff)
+    {
+        if (!NRF_LOG_PROCESS())
+        {
+            wait_for_event();
+        }
+    }
+
+    buttons_disable();
+	return m_button;
+}
 
 void test_run(void)
 {
     NRF_LOG_RAW_INFO("\r\n");
-    NRF_LOG_INFO("Test is ready. Press any key to run.\r\n");
+    NRF_LOG_INFO("Test is ready. Press any button to run.\r\n");
     NRF_LOG_FLUSH();
+	
+	display_print_line_inc("Test is ready. Press any button to run.");
+	display_show();
 
-    (void) NRF_LOG_GETCHAR();
-
+    //(void) NRF_LOG_GETCHAR();
+	(void) button_read();
+	
     counter_start();
     nrf_ble_amts_notif_spam(&m_amts);
 }
@@ -268,7 +340,7 @@ void terminate_test(void)
     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
         NRF_LOG_INFO("Disconnecting.\r\n");
-		display_print_line_inc("Disconnecting", 0);
+		display_print_line_inc("Disconnecting");
 		m_display_show = true;
 		
         ret_code_t ret = sd_ble_gap_disconnect(m_conn_handle,
@@ -310,7 +382,7 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
         {
             bsp_board_led_on(LED_READY);
             NRF_LOG_INFO("Notifications enabled.\r\n");
-			display_print_line_inc("Notifications enabled.", 0);
+			display_print_line_inc("Notifications enabled.");
 			m_display_show = true;
 			
             m_notif_enabled = true;
@@ -351,7 +423,6 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
         {
 			m_transfer_data.kB_transfered++;
 			m_display_show_transfer_data = true;
-			
             bsp_board_led_invert(LED_PROGRESS);
         } break;
 
@@ -364,17 +435,17 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
             bsp_board_led_on(LED_FINISHED);
 
 			display_draw_nordic_logo();
-			display_print_line_inc("Transfer done.", 0);
+			display_print_line_inc("Transfer done.");
 			
 			char str[50];
 			
 			uint32_t counter_ticks = counter_get();
 			sprintf(str, "Time: %d.%d seconds elapsed.", (counter_ticks / 100), (counter_ticks % 100));
-			display_print_line_inc(str, 0);
+			display_print_line_inc(str);
 			
             NRF_LOG_INFO("Transfered 1MB bytes (sent %u bytes).\r\n", evt.bytes_transfered_cnt);
-			sprintf(str, "Transfered 1MB (sent %u bytes).", evt.bytes_transfered_cnt);
-			display_print_line_inc(str, 0);
+            sprintf(str, "Transfered 1MB (sent %u bytes).", evt.bytes_transfered_cnt);
+			display_print_line_inc(str);
 			
             float timems = (float)(counter_get());
             uint32_t sent_octet_cnt = evt.bytes_transfered_cnt * BYTE;
@@ -385,14 +456,10 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 			
             NRF_LOG_INFO("== Throughput: " NRF_LOG_FLOAT_MARKER " Kbits/s.\r\n", NRF_LOG_FLOAT(throughput));
 			sprintf(str, "Throughput: %f Kbits/s.", throughput);
-			display_print_line_inc(str, 0);
-			
-			display_print_line_inc("", 0);
-			display_print_line_inc("Press any button to exit.", 0);
+			display_print_line_inc(str);
 			
 			m_display_show = true;
 			m_transfer_done = true;
-			button_pushed = 0xff;
 
             err_code = nrf_ble_amtc_rcb_read(&m_amtc);
             if (err_code != NRF_SUCCESS)
@@ -419,9 +486,9 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
         case NRF_BLE_AMT_C_EVT_DISCOVERY_COMPLETE:
         {
             NRF_LOG_INFO("AMT service discovered on the peer.\r\n");
-			display_print_line_inc("AMT service discovered on the peer.", 0);
+			display_print_line_inc("AMT service discovered on the peer.");
 			m_display_show = true;
-
+			
             err_code = nrf_ble_amtc_handles_assign(p_amt_c ,
                                                     p_evt->conn_handle,
                                                     &p_evt->params.peer_db);
@@ -452,16 +519,11 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
                 bytes_cnt -= 1024;
                 kbytes_cnt++;
 								
-				if((kbytes_cnt % 10) == 0)
-				{
-					NRF_LOG_INFO("Received %u kbytes\r\n", kbytes_cnt);
-				}
-				/*
-				display_clear();
-				sprintf(str, "Received %d kbytes", kbytes_cnt);
-				display_print_line_inc(str, 0);
-				m_display_show = true;
-				*/
+								if((kbytes_cnt % 10) == 0)
+								{
+									NRF_LOG_INFO("Received %u kbytes\r\n", kbytes_cnt);
+								}
+
                 nrf_ble_amts_rbc_set(&m_amts, p_evt->params.hvx.bytes_rcvd);
             }
 
@@ -478,9 +540,9 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
                              p_evt->params.hvx.bytes_rcvd);
 				
 				display_clear();
-				display_print_line_inc("Transfer complete", 0);
+				display_print_line_inc("Transfer complete");
 				sprintf(str, "Received %u bytes", p_evt->params.hvx.bytes_rcvd); 
-				display_print_line_inc(str, 0);
+				display_print_line_inc(str);
 				m_display_show = true;
 
                 nrf_ble_amts_rbc_set(&m_amts, p_evt->params.hvx.bytes_rcvd);
@@ -598,13 +660,13 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
     if (m_gap_role == BLE_GAP_ROLE_PERIPH)
     {
         NRF_LOG_INFO("Connected as a peripheral.\r\n");
-		display_print_line_inc("Connected as a peripheral.", 0);
+		display_print_line_inc("Connected as a peripheral.");
 		m_display_show = true;
     }
     else if (m_gap_role == BLE_GAP_ROLE_CENTRAL)
     {
         NRF_LOG_INFO("Connected as a central.\r\n");
-		display_print_line_inc("Connected as a central.", 0);
+		display_print_line_inc("Connected as a central.");
 		m_display_show = true;
     }
 
@@ -613,7 +675,7 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
     (void) sd_ble_gap_adv_stop();
 
     NRF_LOG_INFO("Discovering GATT database...\r\n");
-	display_print_line_inc("Discovering GATT database...", 0);
+	display_print_line_inc("Discovering GATT database...");
 	m_display_show = true;
 
     // Zero the database before starting discovery.
@@ -635,7 +697,7 @@ void on_ble_gap_evt_disconnected(ble_gap_evt_t const * p_gap_evt)
     m_conn_handle = BLE_CONN_HANDLE_INVALID;
 
     NRF_LOG_INFO("Disconnected (reason 0x%x).\r\n", p_gap_evt->params.disconnected.reason);
-	display_print_line_inc("Disconnected", 0);
+	display_print_line_inc("Disconnected");
 	m_display_show = true;
 
     if (m_run_test)
@@ -665,7 +727,7 @@ void on_ble_gap_evt_adv_report(ble_gap_evt_t const * p_gap_evt)
 	
 	char str[100];
 	sprintf(str, "Device \"%s\" with matching name found, ", m_target_periph_name);
-	display_print_line_inc("Device with matching name found", 0);
+	display_print_line_inc("Device with matching name found");
 	m_display_show = true;
 
     // Stop advertising.
@@ -793,6 +855,7 @@ static void ble_stack_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+
 /**@brief Function for setting up advertising data.
  */
 static void advertising_data_set(void)
@@ -823,6 +886,9 @@ void advertising_start(void)
     };
 
     NRF_LOG_INFO("Starting advertising.\r\n");
+	
+	display_print_line_inc("Starting advertising.");
+	m_display_show = true;
 
     uint32_t err_code;
     err_code = sd_ble_gap_adv_start(&adv_params);
@@ -837,21 +903,15 @@ void advertising_start(void)
 void scan_start(void)
 {
     NRF_LOG_INFO("Starting scan.\r\n");
-
-	display_print_line_inc("Starting scan.", 0);
-	m_display_show = true;
 	
+	display_print_line_inc("Starting scan.");
+	m_display_show = true;
+
     ret_code_t err_code;
     err_code = sd_ble_gap_scan_start(&m_scan_param);
     APP_ERROR_CHECK(err_code);
 
     bsp_board_led_on(LED_SCANNING_ADVERTISING);
-}
-
-
-static void wait_for_event(void)
-{
-    (void) sd_app_evt_wait();
 }
 
 
@@ -904,7 +964,7 @@ static void conn_params_init(void)
 void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t * p_evt)
 {
     NRF_LOG_INFO("ATT MTU exchange completed.\r\n");
-	display_print_line_inc("ATT MTU exchange completed.", 0);
+	display_print_line_inc("ATT MTU exchange completed.");
 	m_display_show = true;
     m_mtu_exchanged = true;
     nrf_ble_amts_on_gatt_evt(&m_amts, p_evt);
@@ -1000,19 +1060,28 @@ void att_mtu_select(void)
     NRF_LOG_INFO(" 2) 158 bytes.\r\n");
     NRF_LOG_INFO(" 3) 247 bytes.\r\n");
     NRF_LOG_FLUSH();
+	
+	display_clear();
+	display_test_params_print();
+	
+	display_print_line_inc("Select an ATT MTU size:");
+	display_print_line_inc(" 1) 23 bytes.");
+	display_print_line_inc(" 2) 158 bytes.");
+	display_print_line_inc(" 3) 247 bytes.");
+	display_show();
 
-    switch (NRF_LOG_GETCHAR())
+    switch (button_read())
     {
-        case ONE:
+        case BUTTON_1:
         default:
             m_test_params.att_mtu = 23;
             break;
 
-        case TWO:
+        case BUTTON_2:
             m_test_params.att_mtu = 158;
             break;
 
-        case THREE:
+        case BUTTON_3:
             m_test_params.att_mtu = 247;
             break;
     }
@@ -1031,19 +1100,28 @@ void conn_interval_select(void)
     NRF_LOG_INFO(" 2) 50 ms\r\n");
     NRF_LOG_INFO(" 3) 400 ms\r\n");
     NRF_LOG_FLUSH();
+	
+	display_clear();
+	display_test_params_print();
+	
+	display_print_line_inc("Select a connection interval:");
+	display_print_line_inc(" 1) 7.5 ms");
+	display_print_line_inc(" 2) 50 ms");
+	display_print_line_inc(" 3) 400 ms");
+	display_show();
 
-    switch (NRF_LOG_GETCHAR())
+    switch (button_read())
     {
-        case ONE:
+        case BUTTON_1:
         default:
             m_test_params.conn_interval = (uint16_t)(MSEC_TO_UNITS(7.5, UNIT_1_25_MS));
             break;
 
-        case TWO:
+        case BUTTON_2:
             m_test_params.conn_interval = (uint16_t)(MSEC_TO_UNITS(50, UNIT_1_25_MS));
             break;
 
-        case THREE:
+        case BUTTON_3:
             m_test_params.conn_interval = (uint16_t)(MSEC_TO_UNITS(400, UNIT_1_25_MS));
             break;
     }
@@ -1057,9 +1135,17 @@ void data_len_ext_select(void)
 {
     NRF_LOG_INFO("Turn on Data Length Extension? (y/n)\r\n");
     NRF_LOG_FLUSH();
+	
+	display_clear();
+	display_test_params_print();
+	
+	display_print_line_inc("Turn on Data Length Extension?");
+	display_print_line_inc(" 1) Yes");
+	display_print_line_inc(" 2) No");
+	display_show();
 
-    char answer = NRF_LOG_GETCHAR();
-    NRF_LOG_INFO("Data Length Extension is %s\r\n", (answer == YES) ?
+    uint8_t answer = button_read();
+    NRF_LOG_INFO("Data Length Extension is %s\r\n", (answer == BUTTON_1) ?
                  (uint32_t) "ON" :
                  (uint32_t) "OFF");
     NRF_LOG_FLUSH();
@@ -1082,22 +1168,33 @@ void test_param_adjust(void)
         NRF_LOG_INFO(" 3) Turn on/off Data length extension (DLE).\r\n");
         NRF_LOG_INFO("Press ENTER when finished.\r\n");
         NRF_LOG_FLUSH();
+		
+		display_clear();
+		
+		display_test_params_print();
+		
+		display_print_line_inc("Adjust test parameters");
+        display_print_line_inc(" 1) Select ATT MTU size");
+        display_print_line_inc(" 2) Select connection interval");
+        display_print_line_inc(" 3) Turn on/off Data length extension (DLE)");
+        display_print_line_inc(" 4) Back");
+        display_show();
 
-        switch (NRF_LOG_GETCHAR())
+        switch (button_read())
         {
-            case ONE:
+            case BUTTON_1:
                 att_mtu_select();
                 break;
 
-            case TWO:
+            case BUTTON_2:
                 conn_interval_select();
                 break;
 
-            case THREE:
+            case BUTTON_3:
                 data_len_ext_select();
                 break;
 
-            case ENTER:
+            case BUTTON_4:
             default:
                 done = true;
                 break;
@@ -1105,10 +1202,8 @@ void test_param_adjust(void)
     }
 }
 
-
 void test_params_print(void)
 {
-	
     NRF_LOG_RAW_INFO("\r\n");
     NRF_LOG_INFO("Current test configuration:\r\n");
     NRF_LOG_INFO("===============================\r\n");
@@ -1123,17 +1218,39 @@ void test_params_print(void)
     NRF_LOG_INFO("===============================\r\n");
     NRF_LOG_RAW_INFO("\r\n");
     NRF_LOG_FLUSH();
+    
+}
+
+void display_test_params_print()
+{
+	char str[50];
+	
+	sprintf(str, "ATT MTU size: %d bytes", m_test_params.att_mtu);
+	display_print_line_inc(str);
+	
+    sprintf(str, "Conn. interval: %.2f ms", (float)m_test_params.conn_interval * 1.25);
+	display_print_line_inc(str);
+    
+	sprintf(str, "Data length extension (DLE): %s", m_test_params.data_len_ext_enabled ?
+                 (uint32_t)"ON" :
+                 (uint32_t)"OFF");
+	display_print_line_inc(str);
+	
+    sprintf(str, "Conn. event length ext.: %s", m_test_params.conn_evt_len_ext_enabled ?
+                 (uint32_t)"ON" :
+                 (uint32_t)"OFF");
+	display_print_line_inc(str);
 }
 
 
 void test_begin(void)
 {
     NRF_LOG_INFO("Preparing the test.\r\n");
-	
-	display_print_line_inc("Preparing the test.", 0);
-	display_show();
-	
     NRF_LOG_FLUSH();
+	
+	display_clear();
+	display_print_line_inc("Preparing the test.\r\n");
+	display_show();
 
     switch (m_gap_role)
     {
@@ -1161,21 +1278,29 @@ void menu_print(void)
 
     while (!begin_test)
     {
+		display_clear();
         test_params_print();
+		display_test_params_print();
+		
         NRF_LOG_INFO("Select an option:\r\n");
         NRF_LOG_INFO(" 1) Run test.\r\n");
         NRF_LOG_INFO(" 2) Adjust test parameters.\r\n");
         NRF_LOG_FLUSH();
 
-        switch (NRF_LOG_GETCHAR())
+		display_print_line_inc("Select an option:\r\n");
+        display_print_line_inc(" 1) Run test.\r\n");
+        display_print_line_inc(" 2) Adjust test parameters.\r\n");
+		display_show();
+		
+        switch (button_read())
         {
-            case ONE:
+            case BUTTON_1:
             default:
                 begin_test = true;
                 test_begin();
                 break;
 
-            case TWO:
+            case BUTTON_2:
                 test_param_adjust();
                 break;
         }
@@ -1189,6 +1314,7 @@ static bool is_test_ready()
 {
     if((m_conn_interval_configured)&&
        !m_run_test &&
+       (m_board_role == BOARD_TESTER) &&
        m_notif_enabled &&
        m_mtu_exchanged)
     {
@@ -1197,357 +1323,31 @@ static bool is_test_ready()
     return false;
 }
 
-static void button_event_handler(uint8_t pin_no, uint8_t button_action)
-{
-	button_pushed = pin_no;
-}
-
-void buttons_init()
-{
-	uint32_t err_code;
-
-   // The array must be static because a pointer to it will be saved in the button library.
-    static app_button_cfg_t buttons[] =
-    {
-        {BUTTON_SEL, false, BUTTON_PULL, button_event_handler},
-		{BUTTON_ENTER, false, BUTTON_PULL, button_event_handler},
-        {BUTTON_BACK, false, BUTTON_PULL, button_event_handler}
-    };
-	
-    err_code = app_button_init(buttons, ARRAY_SIZE(buttons), BUTTON_DETECTION_DELAY);
-    APP_ERROR_CHECK(err_code);
-	
-    err_code = app_button_enable();
-    APP_ERROR_CHECK(err_code);
-}
-
-void state_init_action(uint8_t button)
-{
-	if(button_pushed != 0xff)
-	{
-		switch(button_pushed)
-		{
-			case BUTTON_SEL:
-				pointer_position ^= 1;
-				display_draw_init_screen(pointer_position);
-				break;
-			case BUTTON_ENTER:
-				if(pointer_position == 0)
-				{
-					pointer_position = 0;
-					m_board_role = BOARD_TESTER;
-					display_draw_sender_screen(pointer_position, &m_test_params);
-					state = SENDER;
-				}
-				else
-				{
-					display_clear();
-					m_board_role = BOARD_DUMMY;
-					advertising_start();
-					scan_start();
-					//display_draw_receiver_screen();
-					state = RECEIVER;
-				}
-				
-				break;
-			case BUTTON_BACK:
-				//no action required
-				break;
-			default:
-				break;
-		}
-		
-		button_pushed = 0xff;
-	}
-}
-
-void state_receive_action(uint8_t button)
-{
-	if(button_pushed == BUTTON_BACK)
-	{
-		pointer_position = 1;
-		display_draw_init_screen(pointer_position);
-		state = INIT;
-		
-		uint32_t err_code;
-		if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
-		{
-			err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
-			APP_ERROR_CHECK(err_code);
-		}
-		else
-		{
-			err_code = sd_ble_gap_adv_stop();
-			APP_ERROR_CHECK(err_code);
-			err_code = sd_ble_gap_scan_stop();
-			APP_ERROR_CHECK(err_code);
-		}
-		button_pushed = 0xff;
-	}
-}
-
-void state_sender_action(uint8_t button)
-{
-	if(button_pushed != 0xff)
-	{
-		switch(button_pushed)
-		{
-			case BUTTON_SEL:
-				pointer_position ^= 1;
-				display_draw_sender_screen(pointer_position, &m_test_params);
-				break;
-			case BUTTON_ENTER:
-				if(pointer_position == 0)
-				{
-					state = TEST_BEGIN;
-					display_draw_test_start_screen();
-					test_begin();
-				}
-				else
-				{
-					state = CONFIG;
-					pointer_position = 0;
-					display_draw_config_screen(pointer_position, &m_test_params);
-				}
-				break;
-			case BUTTON_BACK:
-				pointer_position = 0;
-				display_draw_init_screen(pointer_position);
-				state = INIT;
-				break;
-			default:
-				break;
-		}
-		
-		button_pushed = 0xff;
-	}
-}
-
-void state_test_begin_action()
-{
-	if(is_test_ready())
-	{
-		display_print_line_inc("Test is ready. Press any button to run", 0);
-		display_show();
-		
-		//TODO: make this interrupt based instead
-		//wait for user to push button
-		button_pushed = 0xff;
-		while(button_pushed == 0xff)
-		{
-			wait_for_event();
-		}
-		
-		display_draw_test_run_screen(&m_transfer_data);
-		
-		counter_start();
-		nrf_ble_amts_notif_spam(&m_amts);
-		
-		state = TEST_RUN;
-	}
-}
-
-void state_test_run_action()
-{
-	if(m_display_show_transfer_data)
-	{
-		display_draw_test_run_screen(&m_transfer_data);
-		m_display_show_transfer_data = false;
-	}
-	if(m_transfer_done)
-	{
-		if(button_pushed != 0xff)
-		{
-			m_transfer_data.kB_transfered = 0;
-			
-			pointer_position = 0;
-			state = INIT;
-			display_draw_init_screen(pointer_position);
-			
-			m_transfer_done = false;
-			button_pushed = 0xff;
-		}
-	}
-}
-
-void state_config_action(uint8_t button)
-{
-	if(button_pushed != 0xff)
-	{
-		switch(button_pushed)
-		{
-			case BUTTON_SEL:
-				pointer_position++;
-				if(pointer_position > 2)
-				{
-					pointer_position = 0;
-				}
-				display_draw_config_screen(pointer_position, &m_test_params);
-				break;
-			case BUTTON_ENTER:
-				if(pointer_position == 0)
-				{
-					state = CONFIG_MTU;
-					pointer_position = 0;
-					display_draw_config_mtu_screen(pointer_position, &m_test_params);
-				}
-				else if(pointer_position == 1)
-				{
-					state = CONFIG_CONN_INT;
-					pointer_position = 0;
-					display_draw_config_conn_int_screen(pointer_position, &m_test_params);
-				}
-				else
-				{
-					state = CONFIG_DLE;
-					pointer_position = 0;
-					display_draw_config_dle_screen(pointer_position, &m_test_params);
-				}
-				break;
-			case BUTTON_BACK:
-				pointer_position = 0;
-				display_draw_sender_screen(pointer_position, &m_test_params);
-				state = SENDER;
-				break;
-			default:
-				break;
-		}
-		
-		button_pushed = 0xff;
-	}
-}
-
-void state_config_mtu_action(uint8_t button)
-{
-	if(button_pushed != 0xff)
-	{
-		switch(button_pushed)
-		{
-			case BUTTON_SEL:
-				pointer_position++;
-				if(pointer_position > 2)
-				{
-					pointer_position = 0;
-				}
-				display_draw_config_mtu_screen(pointer_position, &m_test_params);
-				break;
-			case BUTTON_ENTER:
-				if(pointer_position == 0)
-				{
-					m_test_params.att_mtu = 23;
-				}
-				else if(pointer_position == 1)
-				{
-					m_test_params.att_mtu = 158;
-				}
-				else
-				{
-					m_test_params.att_mtu = 247;
-				}
-				gatt_mtu_set(m_test_params.att_mtu);
-				
-			case BUTTON_BACK:
-				pointer_position = 0;
-				display_draw_config_screen(pointer_position, &m_test_params);
-				state = CONFIG;
-				break;
-			default:
-				break;
-		}
-		
-		button_pushed = 0xff;
-	}
-}
-
-void state_config_conn_int_action(uint8_t button)
-{
-	if(button_pushed != 0xff)
-	{
-		switch(button_pushed)
-		{
-			case BUTTON_SEL:
-				pointer_position++;
-				if(pointer_position > 2)
-				{
-					pointer_position = 0;
-				}
-				display_draw_config_conn_int_screen(pointer_position, &m_test_params);
-				break;
-			case BUTTON_ENTER:
-				if(pointer_position == 0)
-				{
-					m_test_params.conn_interval = (uint16_t)(MSEC_TO_UNITS(7.5, UNIT_1_25_MS));
-				}
-				else if(pointer_position == 1)
-				{
-					m_test_params.conn_interval = (uint16_t)(MSEC_TO_UNITS(50, UNIT_1_25_MS));
-				}
-				else
-				{
-					m_test_params.conn_interval = (uint16_t)(MSEC_TO_UNITS(400, UNIT_1_25_MS));
-				}
-				
-			case BUTTON_BACK:
-				pointer_position = 0;
-				display_draw_config_screen(pointer_position, &m_test_params);
-				state = CONFIG;
-				break;
-			default:
-				break;
-		}
-		
-		button_pushed = 0xff;
-	}
-}
-
-void state_config_dle_action(uint8_t button)
-{
-	if(button_pushed != 0xff)
-	{
-		switch(button_pushed)
-		{
-			case BUTTON_SEL:
-				pointer_position++;
-				if(pointer_position > 1)
-				{
-					pointer_position = 0;
-				}
-				display_draw_config_dle_screen(pointer_position, &m_test_params);
-				break;
-			case BUTTON_ENTER:
-				if(pointer_position == 0)
-				{
-					m_test_params.data_len_ext_enabled = 1;
-				}
-				else
-				{
-					m_test_params.data_len_ext_enabled = 0;
-				}
-				
-				data_len_ext_set(m_test_params.data_len_ext_enabled);
-			case BUTTON_BACK:
-				pointer_position = 0;
-				display_draw_config_screen(pointer_position, &m_test_params);
-				state = CONFIG;
-				break;
-			default:
-				break;
-		}
-		
-		button_pushed = 0xff;
-	}
-}
 
 int main(void)
 {
-	display_init();
-	
     log_init();
-
+	
+	bool display_connected = false;
+	//comment out display_init if no display is attached
+	display_connected = display_init();
+	
     leds_init();
     timer_init();
     counter_init();
-    buttons_init();
+	if(display_connected)
+	{
+		#ifdef NRF52840_XXAA
+			buttons_init(buttons);
+		#endif
+		#ifdef NRF52832
+			buttons_init(buttons_display_pca10040);
+		#endif
+	}
+	else
+	{
+		buttons_init(buttons);
+	}
 
     ble_stack_init();
 
@@ -1555,6 +1355,7 @@ int main(void)
     conn_params_init();
     gatt_init();
     advertising_data_set();
+	
 
     server_init();
     client_init();
@@ -1564,41 +1365,73 @@ int main(void)
     // Enable the Connection Event Length Extension.
     conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
 
-	display_draw_init_screen(pointer_position);
+    NRF_LOG_INFO("ATT MTU example started.\r\n");
+    NRF_LOG_INFO("Press button 1 on the board connected to the PC.\r\n");
+    NRF_LOG_INFO("Press button 2 on other board.\r\n");
+    NRF_LOG_FLUSH();
+	
+	display_clear();
+	display_print_line_inc("ATT MTU example started.\r\n");
+    display_print_line_inc("Press button 1 on the board");
+	display_print_line_inc("connected to the PC.");
+    display_print_line_inc("Press button 2 on other board.");
+	display_show();
 
+    uint8_t button = button_read();
+
+	if(button == BUTTON_1)
+	{
+		m_board_role = BOARD_TESTER;
+	}
+	else
+	{
+		m_board_role = BOARD_DUMMY;
+	}
+
+    if (m_board_role == BOARD_TESTER)
+    {
+        m_print_menu = true;
+    }
+    if (m_board_role == BOARD_DUMMY)
+    {
+        advertising_start();
+        scan_start();
+    }
+
+    // Enter main loop.
+    NRF_LOG_INFO("Entering main loop.\r\n");
     for (;;)
     {
-		switch(state)
+		
+		if(m_transfer_done)
 		{
-			case INIT:
-				state_init_action(button_pushed);
-				break;
-			case RECEIVER:
-				state_receive_action(button_pushed);
-				break;
-			case SENDER:
-				state_sender_action(button_pushed);
-				break;
-			case CONFIG:
-				state_config_action(button_pushed);
-				break;
-			case CONFIG_MTU:
-				state_config_mtu_action(button_pushed);
-				break;
-			case CONFIG_CONN_INT:
-				state_config_conn_int_action(button_pushed);
-				break;
-			case CONFIG_DLE:
-				state_config_dle_action(button_pushed);
-				break;
-			case TEST_BEGIN:
-				state_test_begin_action();
-				break;
-			case TEST_RUN:
-				state_test_run_action();
-				break;
-			default:
-				break;
+			display_print_line_inc("");
+			display_print_line_inc("Press any button to exit.");
+			display_show();
+			
+			button_read();
+			m_transfer_done = false;
+		}
+		
+        if (m_print_menu && !m_transfer_done)
+        {
+            menu_print();
+        }
+
+        if (is_test_ready())
+        {
+			//clear data from the last transfer
+			m_display_show_transfer_data = false;
+			m_transfer_data.kB_transfered = 0;
+			
+            m_run_test = true;
+            test_run();
+        }
+
+		if(m_display_show_transfer_data)
+		{
+			display_draw_test_run_screen(&m_transfer_data);
+			m_display_show_transfer_data = false;
 		}
 		
 		if(m_display_show)
@@ -1607,10 +1440,11 @@ int main(void)
 			m_display_show = false;
 		}
 		
-		if (!NRF_LOG_PROCESS())
+        if (!NRF_LOG_PROCESS())
         {
             wait_for_event();
         }
+
     }
 }
 
