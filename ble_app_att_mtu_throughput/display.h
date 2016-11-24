@@ -10,6 +10,7 @@ typedef struct
     uint16_t conn_interval;             /**< Connection interval expressed in units of 1.25 ms. */
     bool     data_len_ext_enabled;      /**< Data length extension status. */
     bool     conn_evt_len_ext_enabled;  /**< Connection event length extension status. */
+	uint8_t     rxtx_phy;
 } test_params_t;
 
 typedef struct

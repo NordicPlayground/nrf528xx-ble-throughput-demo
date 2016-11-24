@@ -48,8 +48,8 @@
 #define TIMER_PRESCALER         0                                   /**< Value of the RTC1 PRESCALER register. */
 #define TIMER_OP_QUEUE_SIZE     4                                   /**< Size of timer operation queues. */
 
-#define ATT_MTU_DEFAULT         158                                 /**< Default ATT MTU size, in bytes. */
-#define CONN_INTERVAL_DEFAULT   MSEC_TO_UNITS(15, UNIT_1_25_MS)     /**< Default connection interval used at connection establishment by central side. */
+#define ATT_MTU_DEFAULT         247                                 /**< Default ATT MTU size, in bytes. */
+#define CONN_INTERVAL_DEFAULT   MSEC_TO_UNITS(200, UNIT_1_25_MS)     /**< Default connection interval used at connection establishment by central side. */
 
 #define CONN_INTERVAL_MIN       MSEC_TO_UNITS(7.5, UNIT_1_25_MS)    /**< Minimum acceptable connection interval, in 1.25 ms units. */
 #define CONN_INTERVAL_MAX       MSEC_TO_UNITS(500, UNIT_1_25_MS)    /**< Maximum acceptable connection interval, in 1.25 ms units. */
@@ -76,8 +76,6 @@
 #define BUTTON_DETECTION_DELAY    APP_TIMER_TICKS(50, TIMER_PRESCALER)       /**< Delay from a GPIOTE event until a button is reported as pushed (in number of timer ticks). */
 
 #define LL_HEADER_LEN             4
-#define BYTE                      8
-#define KBYTE                     1024
 
 
 typedef enum
@@ -132,21 +130,22 @@ typedef struct
     uint16_t   data_len;    /**< Length of data. */
 } data_t;
 
+static nrf_ble_amtc_t m_amtc;
+static nrf_ble_amts_t m_amts;
 
-static volatile bool             m_run_test;
-static volatile bool             m_notif_enabled;
-static volatile bool             m_mtu_exchanged;
-static volatile bool             m_print_menu;
-static volatile bool             m_conn_interval_configured;
-static volatile board_role_t     m_board_role    = NOT_SELECTED;
-static uint16_t                  m_conn_handle   = BLE_CONN_HANDLE_INVALID; /**< Handle of the current BLE connection .*/
-static uint8_t                   m_gap_role      = BLE_GAP_ROLE_INVALID;    /**< BLE role for this connection, see @ref BLE_GAP_ROLES */
+static bool volatile m_run_test;
+static bool volatile m_print_menu;
+static bool volatile m_notif_enabled;
+static bool volatile m_mtu_exchanged;
+static bool volatile m_phy_updated;
+static bool volatile m_conn_interval_configured;
 
-static nrf_ble_gatt_t            m_gatt;                /**< GATT module instance. */
-static ble_db_discovery_t        m_ble_db_discovery;    /**< Structure used to identify the DB Discovery module. */
+static board_role_t volatile m_board_role  = NOT_SELECTED;
+static uint16_t              m_conn_handle = BLE_CONN_HANDLE_INVALID; /**< Handle of the current BLE connection .*/
+static uint8_t               m_gap_role    = BLE_GAP_ROLE_INVALID;    /**< BLE role for this connection, see @ref BLE_GAP_ROLES */
 
-static nrf_ble_amtc_t            m_amtc;
-static nrf_ble_amts_t            m_amts;
+static nrf_ble_gatt_t     m_gatt;                /**< GATT module instance. */
+static ble_db_discovery_t m_ble_db_discovery;    /**< Structure used to identify the DB Discovery module. */
 
 /* Name to use for advertising and connection. */
 static const char m_target_periph_name[] = DEVICE_NAME;
@@ -158,6 +157,7 @@ static test_params_t m_test_params =
     .conn_interval            = CONN_INTERVAL_DEFAULT,
     .data_len_ext_enabled     = true,
     .conn_evt_len_ext_enabled = true,
+	.rxtx_phy                 = BLE_GAP_PHY_2MBPS,
 };
 
 /* Scan parameters requested for scanning and connection. */
@@ -185,6 +185,9 @@ void advertising_start(void);
 void scan_start(void);
 void test_params_print(void);
 void display_test_params_print(void);
+uint8_t button_read(void);
+static void wait_for_event(void);
+void menu_print(void);
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -210,7 +213,6 @@ void assert_nrf_callback(uint16_t line_num, const uint8_t * p_file_name)
 static void leds_init(void)
 {
     bsp_board_leds_init();
-    bsp_board_leds_off();
 }
 
 
@@ -223,12 +225,6 @@ static void timer_init(void)
     // Initialize timer module.
     APP_TIMER_INIT(TIMER_PRESCALER, TIMER_OP_QUEUE_SIZE, false);
 }
-
-static void wait_for_event(void)
-{
-    (void) sd_app_evt_wait();
-}
-
 
 /**@brief Function for initializing GAP parameters.
  *
@@ -243,73 +239,13 @@ static void gap_params_init(void)
     BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
 
     err_code = sd_ble_gap_device_name_set(&sec_mode,
-                                          (const uint8_t *)DEVICE_NAME,
+                                          (uint8_t const*)DEVICE_NAME,
                                           strlen(DEVICE_NAME));
     APP_ERROR_CHECK(err_code);
 
     err_code = sd_ble_gap_ppcp_set(&m_conn_param);
     APP_ERROR_CHECK(err_code);
 
-}
-
-/**@brief Function for handling events from the button handler module.
- *
- * @param[in] pin_no        The pin that the event applies to.
- * @param[in] button_action The button action (press/release).
- */
-static void button_event_handler(uint8_t pin_no, uint8_t button_action)
-{
-	if(button_action == APP_BUTTON_PUSH)
-	{
-		m_button = pin_no;
-	}
-}
-
-/**@brief Function for initializing the button library.
- */
-static void buttons_init(app_button_cfg_t *btns)
-{
-    uint32_t err_code;
-	
-    err_code = app_button_init(btns, ARRAY_SIZE(buttons), BUTTON_DETECTION_DELAY);
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for enabling button input.
- */
-static void buttons_enable(void)
-{
-    ret_code_t err_code;
-    err_code = app_button_enable();
-    APP_ERROR_CHECK(err_code);
-}
-
-
-/**@brief Function for disabling button input.
- */
-static void buttons_disable(void)
-{
-    ret_code_t err_code;
-    err_code = app_button_disable();
-    APP_ERROR_CHECK(err_code);
-}
-
-uint8_t button_read(void)
-{
-	m_button = 0xff;
-    buttons_enable();
-
-    while (m_button == 0xff)
-    {
-        if (!NRF_LOG_PROCESS())
-        {
-            wait_for_event();
-        }
-    }
-
-    buttons_disable();
-	return m_button;
 }
 
 void test_run(void)
@@ -327,9 +263,6 @@ void test_run(void)
     counter_start();
     nrf_ble_amts_notif_spam(&m_amts);
 }
-
-
-void menu_print(void);
 
 void terminate_test(void)
 {
@@ -421,7 +354,8 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 
         case SERVICE_EVT_TRANSFER_1KB:
         {
-			m_transfer_data.kB_transfered++;
+			//NRF_LOG_INFO("Sent %u KBytes\r\n", (evt.bytes_transfered_cnt / 1000));
+			m_transfer_data.kB_transfered = evt.bytes_transfered_cnt / 1024;
 			m_display_show_transfer_data = true;
             bsp_board_led_invert(LED_PROGRESS);
         } break;
@@ -448,11 +382,12 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 			display_print_line_inc(str);
 			
             float timems = (float)(counter_get());
-            uint32_t sent_octet_cnt = evt.bytes_transfered_cnt * BYTE;
+            uint32_t sent_octet_cnt = evt.bytes_transfered_cnt * 8;
             float throughput = (float)(sent_octet_cnt * 100) / timems;
-            throughput = throughput / (float)KBYTE;
+            throughput = throughput / (float)1000;
             NRF_LOG_RAW_INFO("\r\n");
-            counter_print();
+            NRF_LOG_INFO("Time: %u.%.2u seconds elapsed.\r\n",
+                         (counter_get() / 100), (counter_get() % 100));
 			
             NRF_LOG_INFO("== Throughput: " NRF_LOG_FLOAT_MARKER " Kbits/s.\r\n", NRF_LOG_FLOAT(throughput));
 			sprintf(str, "Throughput: %f Kbits/s.", throughput);
@@ -519,10 +454,10 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
                 bytes_cnt -= 1024;
                 kbytes_cnt++;
 								
-								if((kbytes_cnt % 10) == 0)
-								{
-									NRF_LOG_INFO("Received %u kbytes\r\n", kbytes_cnt);
-								}
+				if((kbytes_cnt % 10) == 0)
+				{
+					NRF_LOG_INFO("Received %u kbytes\r\n", kbytes_cnt);
+				}
 
                 nrf_ble_amts_rbc_set(&m_amts, p_evt->params.hvx.bytes_rcvd);
             }
@@ -562,6 +497,32 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
     }
 }
 
+
+uint32_t phy_str(uint8_t phy)
+{
+    char const * phy_str[] =
+    {
+        "1 Mbps",
+        "2 Mbps",
+        "Coded",
+        "Unknown"
+    };
+
+    switch (phy)
+    {
+        case BLE_GAP_PHY_1MBPS:
+            return (uint32_t)(phy_str[0]);
+
+        case BLE_GAP_PHY_2MBPS:
+            return (uint32_t)(phy_str[1]);
+
+        case BLE_GAP_PHY_CODED:
+            return (uint32_t)(phy_str[2]);
+
+        default:
+            return (uint32_t)(phy_str[3]);
+    }
+}
 
 /**
  * @brief Parses advertisement data, providing length and location of the field in case
@@ -608,7 +569,7 @@ static uint32_t adv_report_parse(uint8_t type, data_t * p_advdata, data_t * p_ty
  * @param[in]   name_to_find   name to search.
  * @return   true if the given name was found, false otherwise.
  */
-static bool find_adv_name(const ble_gap_evt_adv_report_t * p_adv_report, const char * name_to_find)
+static bool find_adv_name(const ble_gap_evt_adv_report_t * p_adv_report, char const * name_to_find)
 {
     uint32_t err_code;
     data_t   adv_data;
@@ -685,6 +646,19 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
     err_code  = ble_db_discovery_start(&m_ble_db_discovery, p_gap_evt->conn_handle);
     APP_ERROR_CHECK(err_code);
 
+	// Request PHY.
+    ble_gap_phys_t phys =
+    {
+        .tx_phys = m_test_params.rxtx_phy,
+        .rx_phys = m_test_params.rxtx_phy,
+    };
+
+	if (m_board_role == BOARD_TESTER)
+    {
+		err_code = sd_ble_gap_phy_request(p_gap_evt->conn_handle, &phys);
+		APP_ERROR_CHECK(err_code);
+	}
+	
     bsp_board_leds_off();
 }
 
@@ -800,6 +774,17 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             APP_ERROR_CHECK(err_code);
             break;
 
+		case BLE_GAP_EVT_PHY_UPDATE:
+        {
+			ble_gap_evt_phy_update_t phy_update;
+			phy_update = p_gap_evt->params.phy_update;
+            NRF_LOG_INFO("PHY updated.\r\n");
+			NRF_LOG_INFO("PHY status: %d\r\n", phy_update.status);
+			NRF_LOG_INFO("TX PHY: %d\r\n", phy_update.tx_phy);
+			NRF_LOG_INFO("RX PHY: %d\r\n", phy_update.rx_phy);
+            m_phy_updated = true;
+        } break;
+		
         default:
             // No implementation needed.
             break;
@@ -914,6 +899,70 @@ void scan_start(void)
     bsp_board_led_on(LED_SCANNING_ADVERTISING);
 }
 
+/**@brief Function for handling events from the button handler module.
+ *
+ * @param[in] pin_no        The pin that the event applies to.
+ * @param[in] button_action The button action (press/release).
+ */
+static void button_event_handler(uint8_t pin_no, uint8_t button_action)
+{
+	if(button_action == APP_BUTTON_PUSH)
+	{
+		m_button = pin_no;
+	}
+}
+
+/**@brief Function for initializing the button library.
+ */
+static void buttons_init(app_button_cfg_t *btns)
+{
+    uint32_t err_code;
+	
+    err_code = app_button_init(btns, ARRAY_SIZE(buttons), BUTTON_DETECTION_DELAY);
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for enabling button input.
+ */
+static void buttons_enable(void)
+{
+    ret_code_t err_code;
+    err_code = app_button_enable();
+    APP_ERROR_CHECK(err_code);
+}
+
+
+/**@brief Function for disabling button input.
+ */
+static void buttons_disable(void)
+{
+    ret_code_t err_code;
+    err_code = app_button_disable();
+    APP_ERROR_CHECK(err_code);
+}
+
+uint8_t button_read(void)
+{
+	m_button = 0xff;
+    buttons_enable();
+
+    while (m_button == 0xff)
+    {
+        if (!NRF_LOG_PROCESS())
+        {
+            wait_for_event();
+        }
+    }
+
+    buttons_disable();
+	return m_button;
+}
+
+static void wait_for_event(void)
+{
+    (void) sd_app_evt_wait();
+}
 
 /**@brief Function for handling a Connection Parameters event.
  *
@@ -1015,6 +1064,18 @@ void log_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+void preferred_phy_set(uint8_t phy)
+{
+    ble_opt_t opts =
+    {
+        .gap_opt.preferred_phys.tx_phys = phy,
+        .gap_opt.preferred_phys.rx_phys = phy,
+    };
+
+    ret_code_t err_code = sd_ble_opt_set(BLE_GAP_OPT_PREFERRED_PHYS_SET, &opts);
+    NRF_LOG_DEBUG("Setting preferred phy (rxtx) to %u: 0x%x\r\n", phy, err_code);
+    APP_ERROR_CHECK(err_code);
+}
 
 void gatt_mtu_set(uint16_t att_mtu)
 {
@@ -1044,14 +1105,61 @@ void data_len_ext_set(bool status)
     ret_code_t err_code;
     ble_opt_t  opt;
 
+	uint16_t pdu_size = status ?
+        (m_test_params.att_mtu + LL_HEADER_LEN) : BLE_GATT_MTU_SIZE_DEFAULT + LL_HEADER_LEN;
+	
+	if(pdu_size > 251)
+	{
+		pdu_size = 251;
+	}
+	
     memset(&opt, 0x00, sizeof(opt));
-    opt.gap_opt.ext_len.rxtx_max_pdu_payload_size = status ?
-        (m_test_params.att_mtu + LL_HEADER_LEN) : GATT_MTU_SIZE_DEFAULT + LL_HEADER_LEN;
+    opt.gap_opt.ext_len.rxtx_max_pdu_payload_size = pdu_size;
 
     err_code = sd_ble_opt_set(BLE_GAP_OPT_EXT_LEN, &opt);
+    NRF_LOG_DEBUG("Setting DLE to %u: 0x%x\r\n", status, err_code);
     APP_ERROR_CHECK(err_code);
 }
 
+
+void preferred_phy_select(void)
+{
+    NRF_LOG_INFO("Select preferred PHY:\r\n");
+    NRF_LOG_INFO(" 1) 1 MBit.\r\n");
+    NRF_LOG_INFO(" 2) 2 MBits.\r\n");
+    NRF_LOG_INFO(" 3) Coded.\r\n");
+    NRF_LOG_FLUSH();
+
+	display_clear();
+	display_test_params_print();
+	
+	display_print_line_inc("Select preferred PHY:");
+	display_print_line_inc(" 1) 1 MBit.");
+	display_print_line_inc(" 2) 2 MBit.");
+	display_print_line_inc(" 3) Coded.");
+	display_show();
+	
+    switch (button_read())
+    {
+        default:
+        case BUTTON_1:
+            m_test_params.rxtx_phy = BLE_GAP_PHY_1MBPS;
+            break;
+
+        case BUTTON_2:
+            m_test_params.rxtx_phy = BLE_GAP_PHY_2MBPS;
+            break;
+
+        case BUTTON_3:
+            m_test_params.rxtx_phy = BLE_GAP_PHY_CODED;
+            break;
+    }
+
+	preferred_phy_set(m_test_params.rxtx_phy);
+
+    NRF_LOG_INFO("Preferred PHY set to %s.\r\n", phy_str(m_test_params.rxtx_phy));
+    NRF_LOG_FLUSH();
+}
 
 void att_mtu_select(void)
 {
@@ -1087,7 +1195,8 @@ void att_mtu_select(void)
     }
 
     gatt_mtu_set(m_test_params.att_mtu);
-
+	data_len_ext_set(m_test_params.data_len_ext_enabled);
+	
     NRF_LOG_INFO("ATT MTU set to %d bytes.\r\n", m_test_params.att_mtu);
     NRF_LOG_FLUSH();
 }
@@ -1155,18 +1264,18 @@ void data_len_ext_select(void)
     data_len_ext_set(m_test_params.data_len_ext_enabled);
 }
 
-
-void test_param_adjust(void)
+bool test_param_adjust_page_1(void)
 {
     bool done = false;
+	bool back = false;
 
     while (!done)
     {
         NRF_LOG_INFO("Adjust test parameters.\r\n");
         NRF_LOG_INFO(" 1) Select ATT MTU size.\r\n");
         NRF_LOG_INFO(" 2) Select connection interval.\r\n");
-        NRF_LOG_INFO(" 3) Turn on/off Data length extension (DLE).\r\n");
-        NRF_LOG_INFO("Press ENTER when finished.\r\n");
+        NRF_LOG_INFO(" 3) Next page.\r\n");
+		NRF_LOG_INFO(" 4) Back.\r\n")
         NRF_LOG_FLUSH();
 		
 		display_clear();
@@ -1176,8 +1285,8 @@ void test_param_adjust(void)
 		display_print_line_inc("Adjust test parameters");
         display_print_line_inc(" 1) Select ATT MTU size");
         display_print_line_inc(" 2) Select connection interval");
-        display_print_line_inc(" 3) Turn on/off Data length extension (DLE)");
-        display_print_line_inc(" 4) Back");
+        display_print_line_inc(" 3) Next page.");
+        display_print_line_inc(" 4) Back.");
         display_show();
 
         switch (button_read())
@@ -1191,15 +1300,86 @@ void test_param_adjust(void)
                 break;
 
             case BUTTON_3:
-                data_len_ext_select();
+				done = true;
                 break;
 
             case BUTTON_4:
             default:
+				back = true;
                 done = true;
                 break;
         }
     }
+	return back;
+}
+
+bool test_param_adjust_page_2(void)
+{
+    bool done = false;
+	bool back = false;
+
+    while (!done)
+    {
+        NRF_LOG_INFO("Adjust test parameters.\r\n");
+        NRF_LOG_INFO(" 1) Turn on/off Data length extension (DLE).\r\n");
+		NRF_LOG_INFO(" 2) Select preferred PHY.\r\n")
+		NRF_LOG_INFO(" 3) Next page.\r\n");
+		NRF_LOG_INFO(" 4) Back.\r\n")
+        NRF_LOG_FLUSH();
+		
+		display_clear();
+		
+		display_test_params_print();
+		
+		display_print_line_inc("Adjust test parameters");
+        display_print_line_inc(" 1) Turn on/off Data length extension (DLE)");
+        display_print_line_inc(" 2) Select preferred PHY.");
+		display_print_line_inc(" 3) Next page.");
+        display_print_line_inc(" 4) Back.");
+        display_show();
+
+        switch (button_read())
+        {
+            case BUTTON_1:
+                data_len_ext_select();
+                break;
+
+            case BUTTON_2:
+                preferred_phy_select();
+                break;
+
+            case BUTTON_3:
+                done = true;
+                break;
+
+            case BUTTON_4:
+            default:
+				back = true;
+                done = true;
+                break;
+        }
+    }
+	return back;
+}
+
+void test_param_adjust(void)
+{
+	bool back = false;
+	uint8_t page = 0;
+	
+	while(!back)
+	{
+		if(page == 0)
+		{
+			back = test_param_adjust_page_1();
+			page++;
+		}
+		else
+		{
+			back = test_param_adjust_page_2();
+			page = 0;
+		}
+	}
 }
 
 void test_params_print(void)
@@ -1208,6 +1388,7 @@ void test_params_print(void)
     NRF_LOG_INFO("Current test configuration:\r\n");
     NRF_LOG_INFO("===============================\r\n");
     NRF_LOG_INFO("ATT MTU size: %d\r\n", m_test_params.att_mtu);
+	NRF_LOG_INFO("Preferredy PHY: %s\r\n", phy_str(m_test_params.rxtx_phy));
     NRF_LOG_INFO("Conn. interval: 0x%x\r\n", m_test_params.conn_interval);
     NRF_LOG_INFO("Data length extension (DLE): %s\r\n", m_test_params.data_len_ext_enabled ?
                  (uint32_t)"ON" :
@@ -1228,6 +1409,9 @@ void display_test_params_print()
 	sprintf(str, "ATT MTU size: %d bytes", m_test_params.att_mtu);
 	display_print_line_inc(str);
 	
+	sprintf(str, "Preferredy PHY: %s\r\n", phy_str(m_test_params.rxtx_phy));
+	display_print_line_inc(str);
+	
     sprintf(str, "Conn. interval: %.2f ms", (float)m_test_params.conn_interval * 1.25);
 	display_print_line_inc(str);
     
@@ -1235,11 +1419,12 @@ void display_test_params_print()
                  (uint32_t)"ON" :
                  (uint32_t)"OFF");
 	display_print_line_inc(str);
-	
+	/*
     sprintf(str, "Conn. event length ext.: %s", m_test_params.conn_evt_len_ext_enabled ?
                  (uint32_t)"ON" :
                  (uint32_t)"OFF");
 	display_print_line_inc(str);
+	*/
 }
 
 
@@ -1249,7 +1434,7 @@ void test_begin(void)
     NRF_LOG_FLUSH();
 	
 	display_clear();
-	display_print_line_inc("Preparing the test.\r\n");
+	//display_print_line_inc("Preparing the test.\r\n");
 	display_show();
 
     switch (m_gap_role)
@@ -1312,11 +1497,12 @@ void menu_print(void)
 
 static bool is_test_ready()
 {
-    if((m_conn_interval_configured)&&
-       !m_run_test &&
-       (m_board_role == BOARD_TESTER) &&
-       m_notif_enabled &&
-       m_mtu_exchanged)
+    if (   (m_board_role == BOARD_TESTER)
+        && m_conn_interval_configured
+        && m_notif_enabled
+        && m_mtu_exchanged
+        && m_phy_updated
+        && !m_run_test)
     {
         return true;
     }
@@ -1360,10 +1546,10 @@ int main(void)
     server_init();
     client_init();
 
-    // Default ATT MTU size and connection interval are set at compile time.
-    // Data Length Extension (DLE) is on by default.
-    // Enable the Connection Event Length Extension.
+    gatt_mtu_set(m_test_params.att_mtu);
+    data_len_ext_set(m_test_params.data_len_ext_enabled);
     conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
+    preferred_phy_set(m_test_params.rxtx_phy);
 
     NRF_LOG_INFO("ATT MTU example started.\r\n");
     NRF_LOG_INFO("Press button 1 on the board connected to the PC.\r\n");

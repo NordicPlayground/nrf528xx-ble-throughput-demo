@@ -15,12 +15,12 @@
 #include "app_error.h"
 #include "amt.h"
 
-#define NRF_LOG_MODULE_NAME "AMT_S"
+#define NRF_LOG_MODULE_NAME "AMTS"
 #include "nrf_log.h"
 
 
-#define OPCODE_LENGTH 1                                                              /**< Length of opcode inside a notification. */
-#define HANDLE_LENGTH 2                                                              /**< Length of handle inside a notification. */
+#define OPCODE_LENGTH 1     /**< Length of opcode inside a notification. */
+#define HANDLE_LENGTH 2     /**< Length of handle inside a notification. */
 
 
 static void char_notification_send(nrf_ble_amts_t * p_ctx);
@@ -167,7 +167,6 @@ void nrf_ble_amts_init(nrf_ble_amts_t * p_ctx, amts_evt_handler_t evt_handler)
 
 void nrf_ble_amts_notif_spam(nrf_ble_amts_t * p_ctx)
 {
-    NRF_LOG_INFO("Spamming notifications.\r\n");
     p_ctx->kbytes_sent = 0;
     p_ctx->bytes_sent  = 0;
     char_notification_send(p_ctx);
@@ -182,7 +181,7 @@ void nrf_ble_amts_on_gatt_evt(nrf_ble_amts_t * p_ctx, nrf_ble_gatt_evt_t * p_gat
 
 static void char_notification_send(nrf_ble_amts_t * p_ctx)
 {
-    uint8_t            data[NRF_BLE_GATT_MAX_MTU_SIZE];
+    uint8_t            data[256];
     uint16_t           len = p_ctx->max_payload_len;
     nrf_ble_amts_evt_t evt;
 
@@ -229,10 +228,6 @@ static void char_notification_send(nrf_ble_amts_t * p_ctx)
         if (p_ctx->kbytes_sent != (p_ctx->bytes_sent / 1024))
         {
             p_ctx->kbytes_sent = (p_ctx->bytes_sent / 1024);
-						if((p_ctx->kbytes_sent % 10) == 0)
-						{
-							NRF_LOG_INFO("Sent %d Kbytes\r\n", p_ctx->kbytes_sent);
-						}
 
             evt.evt_type             = SERVICE_EVT_TRANSFER_1KB;
             evt.bytes_transfered_cnt = p_ctx->bytes_sent;

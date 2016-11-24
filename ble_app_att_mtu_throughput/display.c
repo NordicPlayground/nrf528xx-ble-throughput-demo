@@ -289,7 +289,7 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	if(timems != 0)
 	{
 		uint32_t sent_kbits = (transfer_data->kB_transfered - last_kB_transferred) * 8;
-		throughput = (float)(sent_kbits * 100) / (timems - last_timems);
+		throughput = (float)(sent_kbits *1024 * 100 / 1000) / (timems - last_timems);
 		
 		last_kB_transferred = transfer_data->kB_transfered;
 		last_timems = timems;

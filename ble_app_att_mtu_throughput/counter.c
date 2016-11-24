@@ -15,13 +15,11 @@
  */
 
 #include "counter.h"
-#include <stdint.h>
 #include "nrf_drv_rtc.h"
-#include "nrf_log.h"
 
 
-/* RTC driver instance using RTC2.
- * RTC0 is used by the SoftDevice, and RTC1 by the app_timer library. */
+// RTC driver instance using RTC2.
+// RTC0 is used by the SoftDevice, and RTC1 by the app_timer library.
 static const nrf_drv_rtc_t m_rtc = NRF_DRV_RTC_INSTANCE(2);
 
 
@@ -69,13 +67,6 @@ uint32_t counter_get(void)
     return(nrf_drv_rtc_counter_get(&m_rtc));
 }
 
-
-void counter_print(void)
-{
-    uint32_t counter_ticks = counter_get();
-    NRF_LOG_INFO("== Time: %d.%d seconds elapsed.\r\n",
-                 (counter_ticks / 100), (counter_ticks % 100));
-}
 /** @}
  *  @endcond
  */
