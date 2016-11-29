@@ -16,6 +16,12 @@
 
 #include <stdint.h>
 
+
+#define FB_PTR_AND_PROTOTYPE(ret_type, func_name, ...) \
+typedef ret_type (*func_name ## _ptr_t) (__VA_ARGS__); \
+ret_type func_name(__VA_ARGS__)
+
+
 #ifdef FB_CUSTOM
 
 #define FB_WIDTH  FB_CUSTOM_WIDTH
@@ -23,15 +29,68 @@
 
 #else
 
+// Begin - Depracated
 #if defined(MLCD_PCA64107_2INCH7) || defined(MLCD_PCA63504_2INCH7) || defined(MLCD_PCA63520_2INCH7)
-#define FB_WIDTH  (400)
-#define FB_HEIGHT (240)
+#define DISP_SHARP_LS027B7DH01A
 #endif
 
 #ifdef MLCD_PCA63517_1INCH27
 #define FB_WIDTH  (96)
 #define FB_HEIGHT (96)
 #endif
+// End - Deprecated
+
+
+#ifdef DISP_SHARP_LS012B7DH05 // 0.96-inch monochrome display
+#define FB_WIDTH  (192)
+#define FB_HEIGHT (192)
+#endif
+
+#ifdef DISP_SHARP_LS010B7DH04 // 0.96-inch monochrome display
+#define FB_WIDTH  (128)
+#define FB_HEIGHT (128)
+#endif
+
+#ifdef DISP_SHARP_LS012B7DD01 // 1.17-inch monochrome display
+#define FB_WIDTH  (184)
+#define FB_HEIGHT (38)
+
+#endif
+#ifdef DISP_SHARP_LS013B7DH05 // 1.26-inch monochrome display
+#define FB_WIDTH  (144)
+#define FB_HEIGHT (168)
+#endif
+
+#ifdef DISP_SHARP_LS013B7DH06 // 1.33-inch 8-color display
+#define FB_WIDTH       (128)
+#define FB_HEIGHT      (128)
+
+#define FB_COLOR_DEPTH (3)
+#endif
+
+#ifdef DISP_SHARP_LS027B7DH01A // 2.7-inch monochrome display
+#define FB_WIDTH  (400)
+#define FB_HEIGHT (240)
+#endif
+
+#ifdef DISP_SHARP_LS032B7DD02 // 3.16-inch monochrome display
+#define FB_WIDTH  (336)
+#define FB_HEIGHT (536)
+#endif
+
+#ifdef DISP_SHARP_LS044Q7DH01 // 4.4-inch monochrome display
+#define FB_WIDTH  (320)
+#define FB_HEIGHT (240)
+#endif
+
+
+#if defined(DISP_JDISPLAY_LPM013M126A) || defined(DISP_JDISPLAY_LPM013M126C) // 1.282 inch 8-color display (the C-variant is with backlight)
+#define FB_WIDTH       (176)
+#define FB_HEIGHT      (176)
+
+#define FB_COLOR_DEPTH (3)
+#endif
+
 
 #endif
 
@@ -41,12 +100,49 @@
 #endif
 
 
+#ifndef FB_COLOR_DEPTH
+#define FB_COLOR_DEPTH  1
+#endif
+
+
+#if (FB_COLOR_DEPTH % 3) == 0
+#ifndef FB_COLOR_RED_DEPTH 
+#define FB_COLOR_RED_DEPTH   (FB_COLOR_DEPTH / 3)
+#endif
+#ifndef FB_COLOR_GREEN_DEPTH 
+#define FB_COLOR_GREEN_DEPTH (FB_COLOR_DEPTH / 3)
+#endif
+#ifndef FB_COLOR_BLUE_DEPTH 
+#define FB_COLOR_BLUE_DEPTH  (FB_COLOR_DEPTH / 3)
+#endif
+#endif
+
+
+#define FB_INVALID_LINE (0xFFFF)
+
+
+#if FB_COLOR_DEPTH == 1
 typedef enum
 {
-    FB_COLOR_BLACK = 0,
-    FB_COLOR_WHITE = 1,
+    FB_COLOR_BLACK  = 0,
+    FB_COLOR_WHITE  = 1,
 } fb_color_t;
+#endif
 
+
+#if FB_COLOR_DEPTH == 3
+typedef enum
+{
+    FB_COLOR_BLACK  = 0,
+    FB_COLOR_RED    = 1,
+    FB_COLOR_GREEN  = 2,
+    FB_COLOR_YELLOW = 3,
+    FB_COLOR_BLUE   = 4,
+    FB_COLOR_MAGENTA= 5,
+    FB_COLOR_CYAN   = 6,
+    FB_COLOR_WHITE  = 7,
+} fb_color_t;
+#endif
 
 uint16_t calc_string_width(char *str);
 
@@ -86,7 +182,7 @@ void fb_pixel_set(uint16_t x, uint16_t y, fb_color_t color);
  * @return The number of the line, or 0xFFFF if the requested line  
  *         is not in the buffer.
  */
-uint16_t fb_line_storage_ptr_get(uint16_t line_number, uint8_t *p_line_length, uint8_t **p_line);
+FB_PTR_AND_PROTOTYPE(uint16_t, fb_line_storage_ptr_get, uint16_t line_number, uint8_t *p_line_length, uint8_t **p_line);
 
 
 /**@brief Sets the storage for the requested line.
@@ -105,7 +201,7 @@ uint16_t fb_line_storage_ptr_get(uint16_t line_number, uint8_t *p_line_length, u
  * @return The number of the line set, or 0xFFFF if the requested line  
  *         is not in the buffer.
  */
-uint16_t fb_line_storage_set(uint16_t line_number, uint8_t line_length, uint8_t *p_line);
+FB_PTR_AND_PROTOTYPE(uint16_t, fb_line_storage_set, uint16_t line_number, uint8_t line_length, uint8_t *p_line);
 
 
 /**@brief Gets the next line that has been modified in the buffer.
@@ -117,7 +213,7 @@ uint16_t fb_line_storage_set(uint16_t line_number, uint8_t line_length, uint8_t 
  * @return The number of the modified line, or 0xFFFF if there is no modified 
  *         line in the buffer.
  */
-uint16_t fb_next_dirty_line_get(uint8_t *p_line_length, uint8_t **p_line);
+FB_PTR_AND_PROTOTYPE(uint16_t, fb_next_dirty_line_get, uint8_t *p_line_length, uint8_t **p_line);
 
 
 /**@brief Draws a line in the framebuffer.

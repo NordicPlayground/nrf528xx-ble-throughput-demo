@@ -271,6 +271,7 @@ void terminate_test(void)
     m_run_test                 = false;
     m_notif_enabled            = false;
     m_mtu_exchanged            = false;
+	m_phy_updated              = false;
     m_conn_interval_configured = false;
     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
@@ -368,38 +369,27 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 			
             bsp_board_led_off(LED_PROGRESS);
             //bsp_board_led_on(LED_FINISHED);
-
-			display_draw_nordic_logo();
-			display_print_line_inc("Transfer done.");
-			
-			char str[50];
-			uint16_t number_x_pos = 130;
 			
 			uint32_t counter_ticks = counter_get();
-			sprintf(str, "%.2f seconds.", (float)counter_ticks / 32768);
-			display_print_line(str, number_x_pos, display_get_line_nr());
-			display_print_line_inc("Time:");
+			m_transfer_data.counter_ticks = counter_ticks;
+			m_transfer_data.bytes_transfered = evt.bytes_transfered_cnt;
 			
-            NRF_LOG_INFO("Transfered: %u KB (%u bytes).\r\n", evt.bytes_transfered_cnt/1024, evt.bytes_transfered_cnt);
-            sprintf(str, "%u KB (%u bytes)).", evt.bytes_transfered_cnt/1024, evt.bytes_transfered_cnt);
-			display_print_line(str, number_x_pos, display_get_line_nr());
-			display_print_line_inc("Transfered:");
+			float sent_octet_cnt = evt.bytes_transfered_cnt * 8;
+			float throughput = (float)(sent_octet_cnt * 32768) / (float)counter_ticks;
+			throughput = throughput / (float)1000;
 			
-            float timems = (float)(counter_get());
-            float sent_octet_cnt = evt.bytes_transfered_cnt * 8;
-            float throughput = (float)(sent_octet_cnt * 32768) / timems;
-            throughput = throughput / (float)1000;
-            NRF_LOG_RAW_INFO("\r\n");
-            NRF_LOG_INFO("Time: %u.%.2u seconds elapsed.\r\n",
-                         (counter_get() / 32768), (counter_get() * 1000 / 32768));
+            NRF_LOG_INFO("Done.\r\n\r\n");
+            NRF_LOG_INFO("=============================\r\n");
+            NRF_LOG_INFO("Time: " NRF_LOG_FLOAT_MARKER " seconds elapsed.\r\n",
+                         NRF_LOG_FLOAT((float)counter_ticks / 32768));
+            NRF_LOG_INFO("Throughput: " NRF_LOG_FLOAT_MARKER " Kbits/s.\r\n",
+                         NRF_LOG_FLOAT(throughput));
+            NRF_LOG_INFO("=============================\r\n");
+            NRF_LOG_INFO("Sent %u bytes of ATT payload.\r\n", evt.bytes_transfered_cnt);
+            NRF_LOG_INFO("Retrieving amount of bytes received from peer...\r\n");
 			
-            NRF_LOG_INFO("== Throughput: " NRF_LOG_FLOAT_MARKER " Kbits/s.\r\n", NRF_LOG_FLOAT(throughput));
-			sprintf(str, "%.2f Kbits/s.", throughput);
-			display_print_line(str, number_x_pos, display_get_line_nr());
-			display_print_line_inc("Throughput:");
-			
-			m_display_show = true;
 			m_transfer_done = true;
+			m_display_show_transfer_data = false;
 
             err_code = nrf_ble_amtc_rcb_read(&m_amtc);
             if (err_code != NRF_SUCCESS)
@@ -509,7 +499,7 @@ uint32_t phy_str(uint8_t phy)
     {
         "1 Mbps",
         "2 Mbps",
-        "Coded",
+        "125 Kbps",
         "Unknown"
     };
 
@@ -661,7 +651,10 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
 	err_code = sd_ble_gap_phy_request(p_gap_evt->conn_handle, &phys);
 	APP_ERROR_CHECK(err_code);
 	
-    bsp_board_leds_off();
+	
+    bsp_board_led_off(LED_SCANNING_ADVERTISING);
+	bsp_board_led_off(LED_READY);
+	bsp_board_led_off(LED_PROGRESS);
 }
 
 
@@ -679,7 +672,9 @@ void on_ble_gap_evt_disconnected(ble_gap_evt_t const * p_gap_evt)
         NRF_LOG_WARNING("GAP disconnection event received while test was running.\r\n")
     }
 
-    bsp_board_leds_off();
+    bsp_board_led_off(LED_SCANNING_ADVERTISING);
+	bsp_board_led_off(LED_READY);
+	bsp_board_led_off(LED_PROGRESS);
 
     terminate_test();
 }
@@ -778,10 +773,31 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
         {
 			ble_gap_evt_phy_update_t phy_update;
 			phy_update = p_gap_evt->params.phy_update;
-            NRF_LOG_INFO("PHY updated.\r\n");
-			NRF_LOG_INFO("PHY status: %d\r\n", phy_update.status);
-			NRF_LOG_INFO("TX PHY: %d\r\n", phy_update.tx_phy);
-			NRF_LOG_INFO("RX PHY: %d\r\n", phy_update.rx_phy);
+            
+			//only print out once
+			if(!m_phy_updated)
+			{
+				switch(phy_update.tx_phy)
+				{
+					case BLE_GAP_PHY_2MBPS:
+						NRF_LOG_INFO("PHY updated to 2Mbps\r\n");
+						display_print_line_inc("PHY updated to 2Mbps");
+						break;
+					case BLE_GAP_PHY_1MBPS:
+						NRF_LOG_INFO("PHY updated to 1Mbps\r\n");
+						display_print_line_inc("PHY updated to 1Mbps");
+						break;
+					case BLE_GAP_PHY_CODED:
+						NRF_LOG_INFO("PHY updated to 125Kbps\r\n");
+						display_print_line_inc("PHY updated to 125Kbps");
+						break;
+					default:
+						NRF_LOG_INFO("PHY updated to unknown\r\n");
+						display_print_line_inc("PHY updated to unknown");
+						break;
+				}
+			}
+			m_display_show = true;
             m_phy_updated = true;
         } break;
 		
@@ -1723,9 +1739,7 @@ int main(void)
 		}
 		if(m_transfer_done)
 		{
-			display_print_line_inc("");
-			display_print_line_inc("Press any button to exit.");
-			display_show();
+			display_test_done_screen(&m_transfer_data);
 			
 			button_read();
 			m_transfer_done = false;
@@ -1738,8 +1752,6 @@ int main(void)
 
         if (is_test_ready())
         {
-			//clear data from the last transfer
-			m_display_show_transfer_data = false;
 			m_transfer_data.bytes_transfered = 0;
 			
             m_run_test = true;

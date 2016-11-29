@@ -27,6 +27,7 @@ void display_test(void);
 void display_draw_nordic_logo(void);
 
 void display_draw_test_run_screen(transfer_data_t *transfer_data);
+void display_test_done_screen(transfer_data_t *transfer_data);
 
 void display_print_line_inc(char * line);
 void display_print_line_center_inc(char * line);

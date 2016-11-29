@@ -52,11 +52,16 @@ uint32_t drv_pca63520_io_init(drv_pca63520_io_cfg_t const * p_drv_pca63520_io_cf
                   (1 << DRV_PCA63520_IO_LF_SEL1_PIN);
 
 
-        drv_sx1509_pulldown_modify((1 << DRV_PCA63520_IO_LF_CNT_PIN), tmp_u16);
-        drv_sx1509_dir_modify((1 << DRV_PCA63520_IO_LF_CNT_PIN), tmp_u16);
-        drv_sx1509_data_modify(0, tmp_u16);
-        
-        return ( drv_sx1509_close() );
+        if ( (drv_sx1509_pulldown_modify((1 << DRV_PCA63520_IO_LF_CNT_PIN), tmp_u16) != DRV_SX1509_STATUS_CODE_SUCCESS)
+        ||   (drv_sx1509_dir_modify((1 << DRV_PCA63520_IO_LF_CNT_PIN), tmp_u16)      != DRV_SX1509_STATUS_CODE_SUCCESS)
+        ||   (drv_sx1509_data_modify(0, tmp_u16)                                     != DRV_SX1509_STATUS_CODE_SUCCESS) )
+        {
+            (void)drv_sx1509_close();
+        }
+        else if ( drv_sx1509_close() == DRV_SX1509_STATUS_CODE_SUCCESS )
+        {
+            return ( DRV_PCA63520_IO_STATUS_CODE_SUCCESS );
+        }
     }
     
     return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
@@ -99,15 +104,30 @@ uint32_t drv_pca63520_io_extcom_clk_cfg(drv_pca63520_io_extcom_clk_t extcom_clk)
         
         if ( extcom_clk != DRV_PCA63520_IO_EXTCOM_CLK_NONE )
         {
-            drv_sx1509_dir_modify(0, 1 << DRV_PCA63520_IO_LF_CNT_PIN);
+            if ( drv_sx1509_dir_modify(0, 1 << DRV_PCA63520_IO_LF_CNT_PIN) != DRV_SX1509_STATUS_CODE_SUCCESS )
+            {
+                (void)drv_sx1509_close();
+                return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+            }
         }
-        drv_sx1509_data_modify(value, extcom_clk_cfg_pins & ~value);
+        if ( drv_sx1509_data_modify(value, extcom_clk_cfg_pins & ~value) != DRV_SX1509_STATUS_CODE_SUCCESS )
+        {
+            (void)drv_sx1509_close();
+            return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+        }
         if ( extcom_clk == DRV_PCA63520_IO_EXTCOM_CLK_NONE )
         {
-            drv_sx1509_dir_modify(1 << DRV_PCA63520_IO_LF_CNT_PIN, 0);
+            if ( drv_sx1509_dir_modify(1 << DRV_PCA63520_IO_LF_CNT_PIN, 0) != DRV_SX1509_STATUS_CODE_SUCCESS )
+            {
+                (void)drv_sx1509_close();
+                return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+            }
         }
     
-        return ( drv_sx1509_close() );
+        if ( drv_sx1509_close() == DRV_SX1509_STATUS_CODE_SUCCESS )
+        {
+            return ( DRV_PCA63520_IO_STATUS_CODE_SUCCESS );
+        }
     }
     
     return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
@@ -121,22 +141,37 @@ uint32_t drv_pca63520_io_extcom_mode_cfg(drv_pca63520_io_extcom_mode_t extcom_mo
         switch ( extcom_mode )
         {
             case DRV_PCA63520_IO_EXTCOM_MODE_EXTENDER_LOW:
-                drv_sx1509_data_modify(0, (1 << DRV_PCA63520_IO_EXTMODE_PIN)     |
-                                          (1 << DRV_PCA63520_IO_EXTCOMIN_EXT_PIN));
+                if ( drv_sx1509_data_modify(0, (1 << DRV_PCA63520_IO_EXTMODE_PIN) |
+                                               (1 << DRV_PCA63520_IO_EXTCOMIN_EXT_PIN)) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             case DRV_PCA63520_IO_EXTCOM_MODE_EXTENDER_HIGH:
-                drv_sx1509_data_modify(1 << DRV_PCA63520_IO_EXTCOMIN_EXT_PIN, 
-                                       1 << DRV_PCA63520_IO_EXTMODE_PIN);
+                if ( drv_sx1509_data_modify(1 << DRV_PCA63520_IO_EXTCOMIN_EXT_PIN, 
+                                            1 << DRV_PCA63520_IO_EXTMODE_PIN) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             case DRV_PCA63520_IO_EXTCOM_MODE_EXTCOM_CLOCK:
-                drv_sx1509_data_modify(1 << DRV_PCA63520_IO_EXTMODE_PIN, 
-                                       1 << DRV_PCA63520_IO_EXTCOMIN_EXT_PIN);
+                if ( drv_sx1509_data_modify(1 << DRV_PCA63520_IO_EXTMODE_PIN, 
+                                            1 << DRV_PCA63520_IO_EXTCOMIN_EXT_PIN) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             default:
                 break;
         }
-    
-        return ( drv_sx1509_close() );
+        
+        if ( drv_sx1509_close() == DRV_SX1509_STATUS_CODE_SUCCESS )
+        {
+            return ( DRV_PCA63520_IO_STATUS_CODE_SUCCESS );
+        }
     }
     
     return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
@@ -160,8 +195,16 @@ uint32_t drv_pca63520_io_extcom_level_get(drv_pca63520_io_extcom_level_t *extcom
                 *extcom_level = DRV_PCA63520_IO_EXTCOM_LEVEL_LOW;
             }
         }
+        else
+        {
+            (void)drv_sx1509_close();
+            return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+        }
         
-        return ( drv_sx1509_close() );
+        if ( drv_sx1509_close() == DRV_SX1509_STATUS_CODE_SUCCESS )
+        {
+            return ( DRV_PCA63520_IO_STATUS_CODE_SUCCESS );
+        }
     }
     
     return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
@@ -175,18 +218,29 @@ uint32_t drv_pca63520_io_spi_clk_mode_cfg(drv_pca63520_io_spi_clk_mode_t spi_clk
         switch ( spi_clk_mode )
         {
             case DRV_PCA63520_IO_SPI_CLK_MODE_DISABLED:
-                drv_sx1509_data_modify(0, (1 << DRV_PCA63520_IO_HF_OSC_ST_PIN      ) |
-                                          (1 << DRV_PCA63520_IO_HF_OSC_PWR_CTRL_PIN));
+                if ( drv_sx1509_data_modify(0, (1 << DRV_PCA63520_IO_HF_OSC_ST_PIN) |
+                                           (1 << DRV_PCA63520_IO_HF_OSC_PWR_CTRL_PIN)) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             case DRV_PCA63520_IO_SPI_CLK_MODE_ENABLED:
-                drv_sx1509_data_modify((1 << DRV_PCA63520_IO_HF_OSC_ST_PIN      ) |
-                                       (1 << DRV_PCA63520_IO_HF_OSC_PWR_CTRL_PIN), 0);
+                if ( drv_sx1509_data_modify((1 << DRV_PCA63520_IO_HF_OSC_ST_PIN) |
+                                       (1 << DRV_PCA63520_IO_HF_OSC_PWR_CTRL_PIN), 0) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             default:
                 break;
         }
     
-        return ( drv_sx1509_close() );
+        if ( drv_sx1509_close() == DRV_SX1509_STATUS_CODE_SUCCESS )
+        {
+            return ( DRV_PCA63520_IO_STATUS_CODE_SUCCESS );
+        }
     }
     
     return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
@@ -200,18 +254,29 @@ uint32_t drv_pca63520_io_disp_spi_si_mode_cfg(drv_pca63520_io_disp_spi_si_mode_t
         switch ( disp_spi_si_mode )
         {
             case DRV_PCA63520_IO_DISP_SPI_SI_MODE_NORMAL:
-                drv_sx1509_data_modify(0, (1 << DRV_PCA63520_IO_LCD_SPI_DATA_CTRL_PIN) |
-                                          (1 << DRV_PCA63520_IO_SPI_CTRL_PIN));
+                if ( drv_sx1509_data_modify(0, (1 << DRV_PCA63520_IO_LCD_SPI_DATA_CTRL_PIN) |
+                                               (1 << DRV_PCA63520_IO_SPI_CTRL_PIN)) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             case DRV_PCA63520_IO_DISP_SPI_SI_MODE_RAM:
-                drv_sx1509_data_modify((1 << DRV_PCA63520_IO_LCD_SPI_DATA_CTRL_PIN) |
-                                       (1 << DRV_PCA63520_IO_SPI_CTRL_PIN), 0);
+                if ( drv_sx1509_data_modify((1 << DRV_PCA63520_IO_LCD_SPI_DATA_CTRL_PIN) |
+                                            (1 << DRV_PCA63520_IO_SPI_CTRL_PIN), 0) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             default:
                 break;
         }
     
-        return ( drv_sx1509_close() );
+        if ( drv_sx1509_close() == DRV_SX1509_STATUS_CODE_SUCCESS )
+        {
+            return ( DRV_PCA63520_IO_STATUS_CODE_SUCCESS );
+        }
     }
     
     return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
@@ -225,16 +290,27 @@ uint32_t drv_pca63520_io_disp_pwr_mode_cfg(drv_pca63520_io_disp_pwr_mode_t disp_
         switch ( disp_pwr_mode )
         {
             case DRV_PCA63520_IO_DISP_PWR_MODE_DISABLED:
-                drv_sx1509_data_modify(0, 1 << DRV_PCA63520_IO_DISP_PWR_CTRL_PIN);
+                if ( drv_sx1509_data_modify(0, 1 << DRV_PCA63520_IO_DISP_PWR_CTRL_PIN) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             case DRV_PCA63520_IO_DISP_PWR_MODE_ENABLED:
-                drv_sx1509_data_modify(1 << DRV_PCA63520_IO_DISP_PWR_CTRL_PIN, 0);
+                if ( drv_sx1509_data_modify(1 << DRV_PCA63520_IO_DISP_PWR_CTRL_PIN, 0) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             default:
                 break;
         }
 
-        return ( drv_sx1509_close() );
+        if ( drv_sx1509_close() == DRV_SX1509_STATUS_CODE_SUCCESS )
+        {
+            return ( DRV_PCA63520_IO_STATUS_CODE_SUCCESS );
+        }
     }
     
     return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
@@ -248,15 +324,27 @@ uint32_t drv_pca63520_io_disp_mode_cfg(drv_pca63520_io_disp_mode_t disp_mode)
         switch ( disp_mode )
         {
             case DRV_PCA63520_IO_DISP_MODE_OFF:
-                drv_sx1509_data_modify(0, 1 << DRV_PCA63520_IO_DISP_PIN);
+                if ( drv_sx1509_data_modify(0, 1 << DRV_PCA63520_IO_DISP_PIN) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             case DRV_PCA63520_IO_DISP_MODE_ON:
-                drv_sx1509_data_modify(1 << DRV_PCA63520_IO_DISP_PIN, 0);
+                if ( drv_sx1509_data_modify(1 << DRV_PCA63520_IO_DISP_PIN, 0) != DRV_SX1509_STATUS_CODE_SUCCESS )
+                {
+                    (void)drv_sx1509_close();
+                    return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );
+                }
                 break;
             default:
                 break;
         }
-        return ( drv_sx1509_close() );
+        
+        if ( drv_sx1509_close() == DRV_SX1509_STATUS_CODE_SUCCESS )
+        {
+            return ( DRV_PCA63520_IO_STATUS_CODE_SUCCESS );
+        }
     }
     
     return ( DRV_PCA63520_IO_STATUS_CODE_DISALLOWED );

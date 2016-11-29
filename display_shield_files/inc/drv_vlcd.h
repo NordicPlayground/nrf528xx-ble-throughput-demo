@@ -38,6 +38,7 @@ typedef enum
     DRV_VLCD_SIGNAL_TYPE_CLEARED,           ///< Sent when the virtual display has been cleared.
     DRV_VLCD_SIGNAL_TYPE_WRITE_COMPLETE,    ///< Sent when the write command has completed.
     DRV_VLCD_SIGNAL_TYPE_READ_COMPLETE,     ///< Sent when the read command has completed.
+    DRV_VLCD_SIGNAL_TYPE_PAUSE,             ///< Sent when the current command has paused.
     DRV_VLCD_SIGNAL_TYPE_ERROR,             ///< Sent when the last operation failed.
 } drv_vlcd_signal_type_t;
 
@@ -57,52 +58,6 @@ enum
  * @param drv_vlcd_signal_type The signal conveyed by the signal callback.
  */
 typedef void (*drv_vlcd_sig_callback_t) (drv_vlcd_signal_type_t drv_vlcd_signal_type);
-
-
-/**@brief Gets the next line that has been modified in the buffer.
- *
- * @param p_line_length A pointer to storage where the length of the next
- *                      modified line in the buffer will be stored.
- * @param p_line        A pointer to the next modified line in the buffer.
- *
- * @return The number of the modified line, or 0xFFFF if there is no modified 
- *         line in the buffer.
- */
-typedef uint16_t (*drv_vlcd_fb_next_dirty_line_get_t) (uint8_t *p_line_length, uint8_t **p_line);
-
-
-
-/**@brief Gets a pointer to the storage for the requested line.
- *
- * @param[in]  line_number      The requested line number.
- * @param[out] p_line_length    A pointer to storage for the length of the
- *                              requested line.
- * @param[out] p_line           A pointer to a pointer pointing to the
- *                              line in the frame buffer.
- *
- * @return The number of the line, or 0xFFFF if the requested line  
- *         is not in the buffer.
- */
-typedef uint16_t (*drv_vlcd_fb_line_storage_ptr_get_t)(uint16_t line_number, uint8_t *p_line_length, uint8_t **p_line);
-
-
-/**@brief Sets the storage for the requested line.
- *
- * @note The old content remains if there is not enought content to fill the
- *       entire line.
- *
- * @note The new content will be truncated if it is bigger than the storage in
- *       the framebuffer.
- *
- * @param[in]  line_number  The requested line number.
- * @param[out] line_length  The length of the new line content.
- * @param[out] p_line       A pointer to the new data for the
- *                          line in the frame buffer.
- *
- * @return The number of the line set, or 0xFFFF if the requested line  
- *         is not in the buffer.
- */
-typedef uint16_t (*drv_vlcd_fb_line_storage_set_t)(uint16_t line_number, uint8_t line_length, uint8_t *p_line);
 
 
 typedef enum
@@ -144,9 +99,6 @@ typedef struct
         uint16_t    width;
         uint16_t    height;
     } fb_dim;
-    drv_vlcd_fb_next_dirty_line_get_t  vlcd_fb_next_dirty_line_get;
-    drv_vlcd_fb_line_storage_ptr_get_t vlcd_fb_line_storage_ptr_get;
-    drv_vlcd_fb_line_storage_set_t     vlcd_fb_line_storage_set;
 } drv_vlcd_cfg_t;
 
 

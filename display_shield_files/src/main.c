@@ -15,6 +15,7 @@
 #include "app_util_platform.h"
 #include "drv_mlcd.h"
 #include "drv_vlcd.h"
+#include "drv_disp_engine.h"
 #include "drv_pca63520_io.h"
 #include "pca63520_util.h"
 
@@ -28,7 +29,7 @@
 
 //#define M_BUSY_PIN  8 // Uncomment this line to toggle the specified pin while in the loop.
 
-//#define USE_CALLBACK    // Comment this line to run the display updates in blocking mode.
+#define USE_CALLBACK    // Comment this line to run the display updates in blocking mode.
 
 static const uint8_t smilies[4][32/4*32] =
 {
@@ -175,7 +176,6 @@ static const uint8_t smilies[4][32/4*32] =
 #endif
 
 #if defined(NRF51)
-
 #define ARDUINO_SCL_PIN      7
 #define ARDUINO_SDA_PIN     30
 
@@ -183,22 +183,10 @@ static const uint8_t smilies[4][32/4*32] =
 #define ARDUINO_MISO_PIN    28
 #define ARDUINO_SCK_PIN     29
 #define ARDUINO_D2          14
+#define ARDUINO_D3          15
 #define ARDUINO_D9          23
 #define ARDUINO_D10         24
-#elif defined(NRF52840)
-
-#define ARDUINO_SCL_PIN     27
-#define ARDUINO_SDA_PIN     26
-
-#define ARDUINO_MOSI_PIN    1.13
-#define ARDUINO_MISO_PIN    1.14
-#define ARDUINO_SCK_PIN     1.15
-#define ARDUINO_D2          1.03
-#define ARDUINO_D9          1.11
-#define ARDUINO_D10         1.12
-
 #elif defined(NRF52)
-
 #define ARDUINO_SCL_PIN     27
 #define ARDUINO_SDA_PIN     26
 
@@ -206,13 +194,11 @@ static const uint8_t smilies[4][32/4*32] =
 #define ARDUINO_MISO_PIN    24
 #define ARDUINO_SCK_PIN     25
 #define ARDUINO_D2          13
+#define ARDUINO_D3          14
 #define ARDUINO_D9          20
 #define ARDUINO_D10         22
-
 #else
-
 #error "Runs only on nRF51 or nRF52."
-
 #endif
 
 
@@ -256,9 +242,14 @@ static const drv_vlcd_cfg_t drv_vlcd_cfg =
     .spi.ss_pin     = ARDUINO_D9,
     .fb_dim.width = FB_WIDTH,
     .fb_dim.height = FB_HEIGHT,
-    .vlcd_fb_next_dirty_line_get = fb_next_dirty_line_get,
-    .vlcd_fb_line_storage_ptr_get = fb_line_storage_ptr_get,
-    .vlcd_fb_line_storage_set = fb_line_storage_set,
+};
+
+
+static const drv_disp_engine_cfg_t drv_disp_engine_cfg =
+{
+    .fb_next_dirty_line_get = fb_next_dirty_line_get,
+    .fb_line_storage_ptr_get = fb_line_storage_ptr_get,
+    .fb_line_storage_set = fb_line_storage_set,
 };
 
 
@@ -279,6 +270,11 @@ static const drv_pca63520_io_cfg_t drv_pca63520_io_cfg =
 
 static volatile bool drv_vlcd_sig_callback_invoked = false;
 static volatile bool m_vlcd_update_in_progrees = false;
+
+PCA63520_UTIL_CONST_DEFAULT_CONFIG_DECLARE(ARDUINO_D2, ARDUINO_D3);
+
+void app_util_critical_region_enter (uint8_t *p_nested){}
+void app_util_critical_region_exit (uint8_t nested){}
 
 static bool m_next_icon_put(void)
 {
@@ -365,40 +361,22 @@ void m_mlcd_shield_demo(void)
     }
 }
 
-void m_mlcd_shield_demo2(void)
-{
-    drv_pca63520_io_disp_pwr_mode_cfg(DRV_PCA63520_IO_DISP_PWR_MODE_ENABLED);
-    drv_pca63520_io_disp_mode_cfg(DRV_PCA63520_IO_DISP_MODE_ON);
-    drv_mlcd_clear();
-    drv_vlcd_clear(DRV_VLCD_COLOR_WHITE);
-
-    fb_reset(FB_COLOR_WHITE);
-    fb_string_put(4, 10, "Hello", FB_COLOR_BLACK);
-    
-    fb_string_put(4, 10 + 26*2, "Progress", FB_COLOR_BLACK);
-    fb_rectangle(4, 10+26-1, 4+100, 10+26*2 - 1, FB_COLOR_BLACK);
-    
-    for(int i = 0; i < 100; i++)
-    {
-        fb_bar(4, 10+26 - 1, 4+i, 10+26*2 - 1, FB_COLOR_BLACK);
-        drv_vlcd_update();
-    
-        pca63520_util_vlcd_mlcd_sync();
-        while (pca63520_util_vlcd_mlcd_sync_active());
-    }
-}
 
 int main(void)
 {
-    drv_23lcv_init();
+    nrf_drv_ppi_init();
+    nrf_drv_gpiote_init();
 
+    drv_23lcv_init();
+    drv_disp_engine_init(&drv_disp_engine_cfg);
     drv_pca63520_io_init(&drv_pca63520_io_cfg);
+    pca63520_util_vlcd_mlcd_sync_setup(&m_pca63520_util_cfg);
     drv_mlcd_init(&drv_mlcd_cfg);
     drv_vlcd_init(&drv_vlcd_cfg);
 
     NVIC_EnableIRQ(TIMER2_IRQn);
     
-    m_mlcd_shield_demo2(); 
+    m_mlcd_shield_demo(); 
 
     for (;;);
 }

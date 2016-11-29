@@ -1638,7 +1638,7 @@
 #define DRV_SX1509_CLOCK_FOSCSRC_Int2MHz (2)                                   /*!< Internal 2MHz oscillator. */
 
 
-/* Field OSCIODIR: OSCIO pin function (Cf.  4.8). */
+/* Field OSCIODIR: OSCIO pin function (Cf. §4.8). */
 #define DRV_SX1509_CLOCK_OSCIODIR_Pos    (4)                                    /*!< The position of the field. */
 #define DRV_SX1509_CLOCK_OSCIODIR_Msk    (0x1 << DRV_SX1509_CLOCK_OSCIODIR_Pos) /*!< The mask of the field. */
 #define DRV_SX1509_CLOCK_OSCIODIR_Input  (0)                                    /*!< OSCIO is an input (OSCIN). */
@@ -1676,21 +1676,21 @@
 #define DRV_SX1509_MISC_DRVMODE_Logarithmic (1)                                  /*!< Logaritmic fade. */
 
 
-/* Field FUNC: NRESET pin function when externally forced low (Cf.  4.4.1 and  4.9.5). */
+/* Field FUNC: NRESET pin function when externally forced low (Cf. §4.4.1 and §4.9.5). */
 #define DRV_SX1509_MISC_FUNC_Pos    (2)                               /*!< The position of the field. */
 #define DRV_SX1509_MISC_FUNC_Msk    (0x1 << DRV_SX1509_MISC_FUNC_Pos) /*!< The mask of the field. */
 #define DRV_SX1509_MISC_FUNC_EqPOR  (0)                               /*!< Equivalent to POR. */
 #define DRV_SX1509_MISC_FUNC_Lmited (1)                               /*!< Reset PWM/Blink/Fade counters (not user programmed values) This bit is can only be reset manually or by POR, not by NRESET. */
 
 
-/* Field AUTOINC: Auto-increment register address (Cf.  4.5). */
+/* Field AUTOINC: Auto-increment register address (Cf. §4.5). */
 #define DRV_SX1509_MISC_AUTOINC_Pos (1)                                  /*!< The position of the field. */
 #define DRV_SX1509_MISC_AUTOINC_Msk (0x1 << DRV_SX1509_MISC_AUTOINC_Pos) /*!< The mask of the field. */
 #define DRV_SX1509_MISC_AUTOINC_On  (0)                                  /*!<  When several consecutive data are read/written, register address is incremented. */
 #define DRV_SX1509_MISC_AUTOINC_Off (1)                                  /*!< When several consecutive data are read/written, register address is kept fixed. */
 
 
-/* Field AUTOCLR: Autoclear NINT on RegData read (Cf.  4.7). */
+/* Field AUTOCLR: Autoclear NINT on RegData read (Cf. §4.7). */
 #define DRV_SX1509_MISC_AUTOCLR_Pos (0)                                  /*!< The position of the field. */
 #define DRV_SX1509_MISC_AUTOCLR_Msk (0x1 << DRV_SX1509_MISC_AUTOCLR_Pos) /*!< The mask of the field. */
 #define DRV_SX1509_MISC_AUTOCLR_On  (0)                                  /*!< RegInterruptSourceA/B is also automatically cleared when RegDataA/B is read. */
@@ -1822,7 +1822,7 @@
 #define DRV_SX1509_DEBOUNCECONFIG_RESERVED0_Msk (0x1F << DRV_SX1509_DEBOUNCECONFIG_RESERVED0_Pos) /*!< The mask of the field. */
 
 
-/* Field TIME: Debounce time (Cf.  4.6.1). */
+/* Field TIME: Debounce time (Cf. §4.6.1). */
 #define DRV_SX1509_DEBOUNCECONFIG_TIME_Pos  (0)                                         /*!< The position of the field. */
 #define DRV_SX1509_DEBOUNCECONFIG_TIME_Msk  (0x7 << DRV_SX1509_DEBOUNCECONFIG_TIME_Pos) /*!< The mask of the field. */
 #define DRV_SX1509_DEBOUNCECONFIG_TIME_0ms5 (0)                                         /*!< 0.5ms x 2MHz/fOSC. */
@@ -2000,26 +2000,26 @@
 #define DRV_SX1509_KEYCONFIG_ROWS_Pos   (3)                                    /*!< The position of the field. */
 #define DRV_SX1509_KEYCONFIG_ROWS_Msk   (0x7 << DRV_SX1509_KEYCONFIG_ROWS_Pos) /*!< The mask of the field. */
 #define DRV_SX1509_KEYCONFIG_ROWS_Off   (0)                                    /*!< Key scan is off. */
-#define DRV_SX1509_KEYCONFIG_ROWS_2Rows (1)                                    /*!< 2 rows   IO[0:1]. */
-#define DRV_SX1509_KEYCONFIG_ROWS_3Rows (2)                                    /*!< 2 rows   IO[0:2]. */
-#define DRV_SX1509_KEYCONFIG_ROWS_4Rows (3)                                    /*!< 2 rows   IO[0:3]. */
-#define DRV_SX1509_KEYCONFIG_ROWS_5Rows (4)                                    /*!< 2 rows   IO[0:4]. */
-#define DRV_SX1509_KEYCONFIG_ROWS_6Rows (5)                                    /*!< 2 rows   IO[0:5]. */
-#define DRV_SX1509_KEYCONFIG_ROWS_7Rows (6)                                    /*!< 2 rows   IO[0:6]. */
-#define DRV_SX1509_KEYCONFIG_ROWS_8Rows (7)                                    /*!< 2 rows   IO[0:7]. */
+#define DRV_SX1509_KEYCONFIG_ROWS_2Rows (1)                                    /*!< 2 rows - IO[0:1]. */
+#define DRV_SX1509_KEYCONFIG_ROWS_3Rows (2)                                    /*!< 3 rows - IO[0:2]. */
+#define DRV_SX1509_KEYCONFIG_ROWS_4Rows (3)                                    /*!< 4 rows - IO[0:3]. */
+#define DRV_SX1509_KEYCONFIG_ROWS_5Rows (4)                                    /*!< 5 rows - IO[0:4]. */
+#define DRV_SX1509_KEYCONFIG_ROWS_6Rows (5)                                    /*!< 6 rows - IO[0:5]. */
+#define DRV_SX1509_KEYCONFIG_ROWS_7Rows (6)                                    /*!< 7 rows - IO[0:6]. */
+#define DRV_SX1509_KEYCONFIG_ROWS_8Rows (7)                                    /*!< 8 rows - IO[0:7]. */
 
 
 /* Field COLS: Number of columns (inputs). */
 #define DRV_SX1509_KEYCONFIG_COLS_Pos   (0)                                    /*!< The position of the field. */
 #define DRV_SX1509_KEYCONFIG_COLS_Msk   (0x7 << DRV_SX1509_KEYCONFIG_COLS_Pos) /*!< The mask of the field. */
-#define DRV_SX1509_KEYCONFIG_COLS_1Col  (0)                                    /*!< 1 column   IO[8]. */
-#define DRV_SX1509_KEYCONFIG_COLS_2Cols (1)                                    /*!< 2 columns   IO[8:9]. */
-#define DRV_SX1509_KEYCONFIG_COLS_3Cols (2)                                    /*!< 3 columns   IO[8:10]. */
-#define DRV_SX1509_KEYCONFIG_COLS_4Cols (3)                                    /*!< 4 columns   IO[8:11]. */
-#define DRV_SX1509_KEYCONFIG_COLS_5Cols (4)                                    /*!< 5 columns   IO[8:12]. */
-#define DRV_SX1509_KEYCONFIG_COLS_6Cols (5)                                    /*!< 6 columns   IO[8:13]. */
-#define DRV_SX1509_KEYCONFIG_COLS_7Cols (6)                                    /*!< 7 columns   IO[8:14]. */
-#define DRV_SX1509_KEYCONFIG_COLS_8Cols (7)                                    /*!< 8 columns   IO[8:15]. */
+#define DRV_SX1509_KEYCONFIG_COLS_1Col  (0)                                    /*!< 1 column - IO[8]. */
+#define DRV_SX1509_KEYCONFIG_COLS_2Cols (1)                                    /*!< 2 columns - IO[8:9]. */
+#define DRV_SX1509_KEYCONFIG_COLS_3Cols (2)                                    /*!< 3 columns - IO[8:10]. */
+#define DRV_SX1509_KEYCONFIG_COLS_4Cols (3)                                    /*!< 4 columns - IO[8:11]. */
+#define DRV_SX1509_KEYCONFIG_COLS_5Cols (4)                                    /*!< 5 columns - IO[8:12]. */
+#define DRV_SX1509_KEYCONFIG_COLS_6Cols (5)                                    /*!< 6 columns - IO[8:13]. */
+#define DRV_SX1509_KEYCONFIG_COLS_7Cols (6)                                    /*!< 7 columns - IO[8:14]. */
+#define DRV_SX1509_KEYCONFIG_COLS_8Cols (7)                                    /*!< 8 columns - IO[8:15]. */
 
 
 /* Register: KEYDATA. */
@@ -2150,10 +2150,10 @@
 /* Field ONTIME: ON Time of IO[n] (1 - 15 : TOnX = 64 * RegTOnX * (255/ClkX), 16 - 31 : TOnX = 512 * RegTOnX * (255/ClkX)). */
 #define DRV_SX1509_ONOFFCFGX_ONTIME_Pos      (16)                                      /*!< The position of the field. */
 #define DRV_SX1509_ONOFFCFGX_ONTIME_Msk      (0x1F << DRV_SX1509_ONOFFCFGX_ONTIME_Pos) /*!< The mask of the field. */
-#define DRV_SX1509_ONOFFCFGX_ONTIME_Infinite (0)                                       /*!< Infinite (Static mode, TOn directly controlled by RegData, Cf  4.9.2). */
+#define DRV_SX1509_ONOFFCFGX_ONTIME_Infinite (0)                                       /*!< Infinite (Static mode, TOn directly controlled by RegData, Cf §4.9.2). */
 
 
-/* Field ONINTENSITY: ON Intensity of IO[n] (Linear mode : IOnX = RegIOnN, Logarithmic mode (fading capable IOs only, Cf  4.9.5) : IOnN = f(RegIOnN)). */
+/* Field ONINTENSITY: ON Intensity of IO[n] (Linear mode : IOnX = RegIOnN, Logarithmic mode (fading capable IOs only, Cf §4.9.5) : IOnN = f(RegIOnN)). */
 #define DRV_SX1509_ONOFFCFGX_ONINTENSITY_Pos (8)                                            /*!< The position of the field. */
 #define DRV_SX1509_ONOFFCFGX_ONINTENSITY_Msk (0xFF << DRV_SX1509_ONOFFCFGX_ONINTENSITY_Pos) /*!< The mask of the field. */
 
@@ -2161,10 +2161,10 @@
 /* Field OFFTIME: OFF Time of IO[n], (1 - 15 : TOffN = 64 * RegOffN[7:3] * (255/ClkN), 16 - 31 : TOffN = 512 * RegOffN[7:3] * (255/ClkN)). */
 #define DRV_SX1509_ONOFFCFGX_OFFTIME_Pos      (3)                                        /*!< The position of the field. */
 #define DRV_SX1509_ONOFFCFGX_OFFTIME_Msk      (0x1F << DRV_SX1509_ONOFFCFGX_OFFTIME_Pos) /*!< The mask of the field. */
-#define DRV_SX1509_ONOFFCFGX_OFFTIME_Infinite (0)                                        /*!< Infinite (Single shot mode, TOff directly controlled by RegData, Cf  4.9.3). */
+#define DRV_SX1509_ONOFFCFGX_OFFTIME_Infinite (0)                                        /*!< Infinite (Single shot mode, TOff directly controlled by RegData, Cf §4.9.3). */
 
 
-/* Field OFFINTENSITY: OFF Intensity of IO[n] (Linear mode : IOffN = 4 x RegOff[2:0], Logarithmic mode (fading capable IOs only, Cf  4.9.5) : IOffN = f(4 x RegOffN[2:0])). */
+/* Field OFFINTENSITY: OFF Intensity of IO[n] (Linear mode : IOffN = 4 x RegOff[2:0], Logarithmic mode (fading capable IOs only, Cf §4.9.5) : IOffN = f(4 x RegOffN[2:0])). */
 #define DRV_SX1509_ONOFFCFGX_OFFINTENSITY_Pos (0)                                            /*!< The position of the field. */
 #define DRV_SX1509_ONOFFCFGX_OFFINTENSITY_Msk (0x7 << DRV_SX1509_ONOFFCFGX_OFFINTENSITY_Pos) /*!< The mask of the field. */
 

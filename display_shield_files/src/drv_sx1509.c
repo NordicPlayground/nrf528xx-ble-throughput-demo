@@ -9,7 +9,7 @@
  * the file.
  *
  */
-#include <drv_sx1509.h>
+#include "drv_sx1509.h"
 
 #define M_REGINPBUFDISABLEB     (0x00)
 #define M_REGINPBUFDISABLEA     (0x01)
@@ -60,6 +60,12 @@
 #define M_REGTRISE4             (0x38)
 #define M_REGTON5               (0x3A)
 #define M_REGTRISE5             (0x3D)
+#define M_REGTON8               (0x49)
+#define M_REGTON9               (0x4C)
+#define M_REGTON12              (0x55)
+#define M_REGTRISE12            (0x58)
+#define M_REGTON13              (0x5A)
+#define M_REGTRISE13            (0x5D)
 #define M_REGTON15              (0x64)
 #define M_REGTRISE15            (0x67)
 #define M_REGRESET              (0x7D)
@@ -78,28 +84,43 @@ static struct
 
 static __INLINE uint8_t  m_onoffcfgx_base_addr_get(uint8_t pin_no)
 {
+
     if ( pin_no < 4 )
     {
         return ( M_REGTON0 + (pin_no * (M_REGTON1 - M_REGTON0)) );
     }
-    else if ( pin_no <= 15 )
+    else if ( pin_no <= 7 )
     {
         return ( M_REGTON4 + ((pin_no - 4) * (M_REGTON5 - M_REGTON4)) );
+    }
+    else if ( pin_no <= 11 )
+    {
+        return ( M_REGTON8 + ((pin_no - 8) * (M_REGTON9 - M_REGTON8)) );
+    }
+    else if ( pin_no <= 15 )
+    {
+        return ( M_REGTON12 + ((pin_no - 12) * (M_REGTON13 - M_REGTON12)) );
     }
 
     return ( M_INVALID_DEV_REG );
 }
+
 
 
 static __INLINE uint8_t  m_risefallcfgx_base_addr_get(uint8_t pin_no)
 {
-    if ( (4 <= pin_no) && (pin_no <= 15) )
+    if ( (4 <= pin_no) && (pin_no <= 7) )
     {
         return ( M_REGTRISE4 + ((pin_no - 4) * (M_REGTRISE5 - M_REGTRISE4)) );
+    }
+    else if ( (12 <= pin_no) && (pin_no <= 15) )
+    {
+        return ( M_REGTRISE12 + ((pin_no - 12) * (M_REGTRISE13 - M_REGTRISE12)) );
     }
 
     return ( M_INVALID_DEV_REG );
 }
+
 
 
 static bool reg_set(uint8_t reg_addr, uint8_t value)
@@ -174,20 +195,6 @@ static bool two_registers_get(uint8_t reg_a, uint8_t reg_b, uint16_t *value)
 }
 
 
-static bool multi_byte_register_set(uint8_t length, uint8_t *p_write_descr)
-{
-    if ( m_drv_sx1509.p_cfg != NULL )
-    {
-        nrf_drv_twi_t const * p_instance = m_drv_sx1509.p_cfg->p_twi_instance;
-        uint8_t               twi_addr   = m_drv_sx1509.p_cfg->twi_addr;
-
-        return ( (nrf_drv_twi_tx(p_instance, twi_addr, p_write_descr, length, M_TWI_STOP) == NRF_SUCCESS) );
-    }
-
-    return ( false );
-}
-
-
 void drv_sx1509_init(void)
 {
     m_drv_sx1509.p_cfg = NULL;
@@ -205,7 +212,7 @@ uint32_t drv_sx1509_open(drv_sx1509_cfg_t const * const p_drv_sx1509_cfg)
         return ( DRV_SX1509_STATUS_CODE_SUCCESS );
     }
 
-    return ( DRV_SX1509_STATUS_CODE_SUCCESS );
+    return ( DRV_SX1509_STATUS_CODE_DISALLOWED );
 }
 
 
@@ -1122,18 +1129,16 @@ uint32_t drv_sx1509_highinpmode_modify(uint16_t set_mask, uint16_t clr_mask)
 
 uint32_t drv_sx1509_reset(void)
 {
-    uint8_t const tx_descr_buff[3] =
-    {
-        M_REGRESET,
-        (DRV_SX1509_RESET_CODE_Reset << DRV_SX1509_RESET_CODE_Pos)  >> 8,
-        (DRV_SX1509_RESET_CODE_Reset << DRV_SX1509_RESET_CODE_Pos)   & 0xFF,
-    };
-
-    if ( !multi_byte_register_set(sizeof(tx_descr_buff), (uint8_t *)&(tx_descr_buff[0])) )
+   if ( !reg_set(M_REGRESET, (DRV_SX1509_RESET_CODE_Reset << DRV_SX1509_RESET_CODE_Pos) >> 8) )
     {
         return ( DRV_SX1509_STATUS_CODE_DISALLOWED );
     }
-    
+
+    if ( !reg_set(M_REGRESET, (DRV_SX1509_RESET_CODE_Reset << DRV_SX1509_RESET_CODE_Pos) & 0xFF) )
+    {
+        return ( DRV_SX1509_STATUS_CODE_DISALLOWED );
+    }
+
     return ( DRV_SX1509_STATUS_CODE_SUCCESS );
 }
 

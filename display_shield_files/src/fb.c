@@ -12,6 +12,10 @@
 #include "fb.h"
 #include <string.h>
 
+#define M_COLOR_FIELD_MASK              ((1UL << FB_COLOR_DEPTH) - 1)
+#define M_ROW_SIZE_BYTES                (((8 - FB_COLOR_DEPTH) + (FB_WIDTH * FB_COLOR_DEPTH)) / 8)
+#define M_ROW_START_OFFS(row)           (M_ROW_SIZE_BYTES * 8 * row)
+#define M_ROW_UINT8_PTR(line_number)    (&(((uint8_t *)&(m_fb.pixels[0]))[M_ROW_SIZE_BYTES * line_number]))
 
 #define BITS_COUNT_TO_UINT32_COUNT(bits_count) ((31 + bits_count) / 32)
 
@@ -26,20 +30,20 @@ typedef enum
 
 
 #ifndef FONTS_DEFAULT_FONT
-FONTS_CONST_ARIAL_20PT_DECLARE(FONTS_DEFAULT_FONT_DECLARATION);
+FONTS_CONST_GENERIC_8PT_DECLARE(FONTS_DEFAULT_FONT_DECLARATION);
 #endif
 
 
 static struct
 {
     uint32_t dirty_flags[BITS_COUNT_TO_UINT32_COUNT(FB_HEIGHT)];
-    uint32_t lines[FB_HEIGHT][BITS_COUNT_TO_UINT32_COUNT(FB_WIDTH)];
+    uint32_t pixels[(3 + M_ROW_SIZE_BYTES * FB_HEIGHT) / 4];
     
     font_info_t const * p_default_font;
 } m_fb = {.p_default_font = &FONTS_DEFAULT_FONT_DECLARATION};
 
 
-int16_t abs16(int16_t x)
+static int16_t abs16(int16_t x)
 {
     int16_t y = (x >> 31);
     return (x ^ y) - y;
@@ -51,200 +55,93 @@ static void inline dirty_flag_set(uint16_t row)
     m_fb.dirty_flags[row >> 5] |= ((uint32_t)FB_LINE_STATUS_DIRTY << (row & 0x1F));
 }
 
-
 static void inline dirty_flag_clear(uint16_t row)
 {
     m_fb.dirty_flags[row >> 5] &= ~((uint32_t)FB_LINE_STATUS_DIRTY << (row & 0x1F));
 }
 
 
-void fb_pixel_set(uint16_t x, uint16_t y, fb_color_t color)
-{
-    uint8_t x_bit = x & 0x1F;
-    uint8_t x_idx = x >> 5;
-    
-    m_fb.lines[y][x_idx] = (m_fb.lines[y][x_idx] & ~((uint32_t)1 << x_bit)) | ((uint32_t)color << x_bit);
-    
-    dirty_flag_set(y);
-}
-
-
 static void inline vline_set(uint16_t x, uint16_t y, uint16_t count, fb_color_t color)
 {
     uint16_t i;
-    uint8_t x_idx = x >> 5;
-    uint8_t x_bit = x & 0x1F;
-    uint32_t x_bit_mask     =  ((uint32_t)color << x_bit);
-    uint32_t x_bit_clr_mask = ~((uint32_t)    1 << x_bit);
+    uint16_t y2 = y + count;
     
-    for ( i = 0; i < count; i++ )
+    for ( i = y; i < y2; i++ )
     {
-        m_fb.lines[y + i][x_idx] = (m_fb.lines[y + i][x_idx] & x_bit_clr_mask) | x_bit_mask;
-    
-        dirty_flag_set(y + i);
+        fb_pixel_set(x, i, color);
     }
+}
+
+
+static void inline bit_pattern_set(uint16_t x, uint16_t y, fb_color_t color, uint16_t width, uint32_t pattern)
+{
+    uint32_t    pixel_pos       = M_ROW_START_OFFS(y) +  x          * FB_COLOR_DEPTH;
+    uint32_t    last_pixel_pos  = M_ROW_START_OFFS(y) + (x + width) * FB_COLOR_DEPTH;
+    uint16_t    pixels_idx      = pixel_pos >> 5;
+    uint8_t     pixel_offs      = pixel_pos & 0x1F;
+    uint32_t    u32             = m_fb.pixels[pixels_idx] & ((1UL << pixel_offs) - 1);
+    
+    uint8_t     pattern_offs    = 0;
+    
+    while ( pixel_pos < last_pixel_pos )
+    {
+        if ( (pattern & (1UL << pattern_offs)) != 0 )
+        {
+            u32 |= (uint32_t)color << pixel_offs;
+        }
+        else
+        {
+            u32 |= m_fb.pixels[pixels_idx] & (M_COLOR_FIELD_MASK << pixel_offs);
+        }
+        
+        if ( (pixel_offs + FB_COLOR_DEPTH) < (sizeof(uint32_t) * 8) )
+        {
+            pixel_offs += FB_COLOR_DEPTH;
+        }
+        else
+        {            
+            m_fb.pixels[pixels_idx++] = u32;
+            
+            pixel_offs -= (sizeof(uint32_t) * 8) - FB_COLOR_DEPTH;
+            if ( (pattern & (1UL << pattern_offs)) != 0 )
+            {
+                u32 = (uint32_t)color >> (FB_COLOR_DEPTH - pixel_offs);
+            }
+            else
+            {
+                u32 = m_fb.pixels[pixels_idx] & (M_COLOR_FIELD_MASK >> (FB_COLOR_DEPTH - pixel_offs));
+            }
+        }
+        
+        pixel_pos += FB_COLOR_DEPTH;        
+        pattern_offs = (pattern_offs + 1) & 0x1F;
+    }
+    
+    if ( pixel_offs > 0 )
+    {
+        m_fb.pixels[pixels_idx] &= ~((1UL << pixel_offs) - 1);
+        m_fb.pixels[pixels_idx] |= u32;
+    }
+    
+    dirty_flag_set(y);
 }
 
 
 static void inline hline_set(uint16_t x, uint16_t y, uint16_t count, fb_color_t color)
 {
-    uint8_t i;
-    uint8_t x1_idx = x >> 5;
-    uint8_t x2_idx = (x + count) >> 5;
-    uint32_t lmsk  = ((uint32_t)1 << (x & 0x1F)) - 1;
-    uint32_t hmsk  = ~(((uint32_t)1 << ((x + count) & 0x1F)) - 1);
-    
-    if ( color == FB_COLOR_BLACK )
-    {            
-        if ( x1_idx == x2_idx )
-        {
-            m_fb.lines[y][x1_idx] = m_fb.lines[y][x1_idx] & (lmsk | hmsk);
-        }
-        else
-        {
-            m_fb.lines[y][x1_idx] = m_fb.lines[y][x1_idx] & lmsk;
-            m_fb.lines[y][x2_idx] = m_fb.lines[y][x2_idx] & hmsk;
-        }
-        
-        for ( i = x1_idx + 1; i < x2_idx; i++ )
-        {
-            m_fb.lines[y][i] = 0;
-        }
-    }
-    else
-    {
-        // ASSERT( color == FB_COLOR_WHITE );
-        if ( x1_idx == x2_idx )
-        {
-            m_fb.lines[y][x1_idx] = m_fb.lines[y][x1_idx] | ~(lmsk | hmsk);
-        }
-        else
-        {
-            m_fb.lines[y][x1_idx] = m_fb.lines[y][x1_idx] | ~lmsk;
-            m_fb.lines[y][x2_idx] = m_fb.lines[y][x2_idx] | ~hmsk;
-        }
-        
-        for ( i = x1_idx + 1; i < x2_idx; i++ )
-        {
-            m_fb.lines[y][i] = 0xFFFFFFFF;
-        }
-    } 
-
-    dirty_flag_set(y);
+    bit_pattern_set(x, y, color, count, 0xFFFFFFFF);
 }
-
 
 uint16_t fb_line_storage_ptr_get(uint16_t line_number, uint8_t *p_line_length, uint8_t **p_line)
 {
     if ( line_number < FB_HEIGHT )
     {
-        *p_line_length = (7 + FB_WIDTH) >> 3;
-        *p_line = (uint8_t *)&(m_fb.lines[line_number]);
+        *p_line_length = M_ROW_SIZE_BYTES;
+        *p_line = M_ROW_UINT8_PTR(line_number);
         return ( line_number );
     }
 
-    return ( 0xFFFF );
-}
-
-
-uint16_t fb_line_storage_set(uint16_t line_number, uint8_t line_length, uint8_t *p_line)
-{
-    if ( line_number < FB_HEIGHT )
-    {
-        if ( ((uint8_t *)&(m_fb.lines[line_number])) != &(p_line[0]) )
-        {
-            memcpy((uint8_t *)&(m_fb.lines[line_number]), &(p_line[0]),
-                (line_length < sizeof(m_fb.lines[line_number]) ? line_length : sizeof(m_fb.lines[line_number])));
-            m_fb.lines[line_number][BITS_COUNT_TO_UINT32_COUNT(FB_WIDTH) - 1] &= LAST_STORAGE_WORD_MASK;
-        }
-        dirty_flag_set(line_number);
-        
-        return ( line_number );
-    }
-
-    return ( 0xFFFF );
-}
-
-
-uint16_t fb_next_dirty_line_get(uint8_t *p_line_length, uint8_t **p_line)
-{
-    uint16_t i;
-    
-    for ( i = 0; i < BITS_COUNT_TO_UINT32_COUNT(FB_HEIGHT); i++ )
-    {
-        uint32_t tmp_u32 = m_fb.dirty_flags[i];
-        uint8_t  y       = i << 5;
-
-        while ( (y < FB_HEIGHT) && (tmp_u32 != 0) )
-        {
-            if ( tmp_u32 & 0x00000001 )
-            {
-                dirty_flag_clear(y);
-                
-                *p_line_length = (7 + FB_WIDTH) >> 3;
-                *p_line = (uint8_t *)&(m_fb.lines[y]);
-                return ( y );
-            }
-            
-            ++y;
-            tmp_u32 >>= 1;
-        }
-    }
-    
-    return ( 0xFFFF );
-}
-
-
-void fb_reset(fb_color_t color)
-{
-    uint16_t i;
-    
-    for ( i = 0; i < FB_HEIGHT; i++ )
-    {
-        if ( color == FB_COLOR_BLACK )
-        {            
-            memset((uint8_t *)&(m_fb.lines[i]), 0, sizeof(m_fb.lines[i]));
-        }
-        else
-        {
-            // ASSERT( color == FB_COLOR_WHITE );
-            memset((uint8_t *)&(m_fb.lines[i]), 0xFF, sizeof(m_fb.lines[i]));
-        }
-    }
-    
-    memset((uint8_t *)&(m_fb.dirty_flags[0]), ~((uint8_t)FB_LINE_STATUS_CLEAN), sizeof(m_fb.dirty_flags));
-}
-
-
-void static inline bit_pattern_set(uint16_t x, uint16_t y, fb_color_t color, uint16_t width, uint32_t pattern)
-{
-    uint8_t first_idx = x >> 5;
-    uint8_t last_idx = (x + width) >> 5;
-    
-    if ( color == FB_COLOR_BLACK )
-    {
-        m_fb.lines[y][first_idx] = (m_fb.lines[y][first_idx] & ~(pattern << (x & 0x1F)));
-    }
-    else
-    {
-        // ASSERT( color == FB_COLOR_WHITE );
-        m_fb.lines[y][first_idx] = (m_fb.lines[y][first_idx] | (pattern << (x & 0x1F)));
-    }
-
-    if ( first_idx != last_idx )
-    {
-        if ( color == FB_COLOR_BLACK )
-        {
-            m_fb.lines[y][last_idx] = (m_fb.lines[y][last_idx] & ~(pattern >> (width - ((x + width) & 0x1F))));
-        }
-        else
-        {
-            // ASSERT( color == FB_COLOR_WHITE );
-            m_fb.lines[y][last_idx] = (m_fb.lines[y][last_idx] | (pattern >> (width - ((x + width) & 0x1F))));
-        }
-    }
-    
-    dirty_flag_set(y);
+    return ( FB_INVALID_LINE );
 }
 
 
@@ -262,7 +159,7 @@ static uint8_t m_put_char(uint16_t x, uint16_t y, char ch, fb_color_t color)
             uint8_t char_idx                         = ch - m_fb.p_default_font->start_char;
             uint8_t const * const p_descr_entry_base = &(m_fb.p_default_font->p_descriptor[m_fb.p_default_font->descr_entry_size * char_idx]);
             
-            width  = ( m_fb.p_default_font->width  != -1 ) ? m_fb.p_default_font->width  : *((__packed uint16_t *)&(p_descr_entry_base[j]));
+            width  = ( m_fb.p_default_font->width  != -1 ) ? m_fb.p_default_font->width  : p_descr_entry_base[j];
 			j += 2;
             height = ( m_fb.p_default_font->height != -1 ) ? m_fb.p_default_font->height : p_descr_entry_base[j++];
             offset = ( m_fb.p_default_font->offset != -1 ) ? m_fb.p_default_font->offset * char_idx : *((__packed uint16_t *)&(p_descr_entry_base[j]));
@@ -271,9 +168,16 @@ static uint8_t m_put_char(uint16_t x, uint16_t y, char ch, fb_color_t color)
         
         for (uint8_t i = 0; i < height; i++)
         {
-            for (uint8_t j = 0; j < bytes_per_line; j++)
+            uint8_t j;
+
+            for ( j = 0; j < (width >> 5); j++ )
             {
-                bit_pattern_set(x + j * 8, y + i, color, 8, m_fb.p_default_font->p_bitmap[offset + (i * bytes_per_line) + j]);
+                bit_pattern_set(x + j * 32, y + i, color, 32, *((uint32_t *)&(m_fb.p_default_font->p_bitmap[offset + (i * bytes_per_line) + j])));
+            }
+
+            if ( (width - (j * 32)) > 0  )
+            {
+                bit_pattern_set(x + j * 32, y + i, color, width - (j * 32), *((uint32_t *)&(m_fb.p_default_font->p_bitmap[offset + (i * bytes_per_line) + j])));
             }
         }
         
@@ -281,6 +185,43 @@ static uint8_t m_put_char(uint16_t x, uint16_t y, char ch, fb_color_t color)
     }
     
     return ( 0 );
+}
+
+
+void fb_reset(fb_color_t color)
+{
+    uint16_t i;
+    
+    hline_set(0, 0, FB_WIDTH, color);
+    
+    for ( i = 1; i < FB_HEIGHT; i++ )
+    {
+        memcpy(M_ROW_UINT8_PTR(i), M_ROW_UINT8_PTR(0), M_ROW_SIZE_BYTES);
+    }
+    
+    memset((uint8_t *)&(m_fb.dirty_flags[0]), ~((uint8_t)FB_LINE_STATUS_CLEAN), sizeof(m_fb.dirty_flags));
+}
+
+
+void fb_pixel_set(uint16_t x, uint16_t y, fb_color_t color)
+{
+    uint32_t pixel_pos  = M_ROW_START_OFFS(y) + x * FB_COLOR_DEPTH;
+    uint16_t pixels_idx = pixel_pos >> 5;
+    uint8_t pixel_offs  = pixel_pos & 0x1F;
+    
+    if ( (pixel_offs + FB_COLOR_DEPTH) < (sizeof(uint32_t) * 8) )
+    {
+        m_fb.pixels[pixels_idx] = (m_fb.pixels[pixels_idx] & ~(M_COLOR_FIELD_MASK << pixel_offs)) | ((uint32_t)color << pixel_offs);
+    }
+    else
+    {
+        uint8_t     pixel_offs  = pixel_pos & 0x07;
+        uint8_t   * p_pixels    = &(((uint8_t *)&(m_fb.pixels[0]))[pixel_pos >> 3]);
+        
+        *((__packed uint32_t *)p_pixels) = (*((__packed uint32_t *)p_pixels) & ~(M_COLOR_FIELD_MASK << pixel_offs)) | ((uint32_t)color << pixel_offs);
+    }
+    
+    dirty_flag_set(y);
 }
 
 
@@ -334,14 +275,7 @@ void fb_bitmap_put(uint16_t x, uint16_t y, uint32_t const * const bitmap, uint16
     {   
         for ( n = 0; n < entries_per_row; n++ )
         {
-            if ( (32 * (n + 1)) < width )
-            {
-                bit_pattern_set(x + 32 * n, y + i, color, 32, bitmap[i * entries_per_row + n]);
-            }
-            else
-            {
-                bit_pattern_set(x + 32 * n, y + i, color, 32, bitmap[i * entries_per_row + n] & (0xFFFFFFFF >> ((32 * (n + 1)) - width)));
-            }
+            bit_pattern_set(x + 32 * n, y + i, color, 32, bitmap[i * entries_per_row + n]);
         }
     }
 }
@@ -350,35 +284,18 @@ void fb_bitmap_put(uint16_t x, uint16_t y, uint32_t const * const bitmap, uint16
 void fb_bitmap8_put(uint16_t x, uint16_t y, uint8_t const * const bitmap, uint16_t width, uint16_t height, fb_color_t color)
 {
     const uint8_t   entries_per_row = (((width - 1) >> 3) + 1);
-    uint8_t         bit_count       = 0;
-    uint32_t        bits            = 0;
-    uint16_t         i, n;
-
-    for ( i = 0; i < height; i++ )
-    {   
-        for ( n = 0; n < entries_per_row; n++ )
+    uint16_t    n, i;
+    
+    for ( n = 0; n < height; n++ )
+    {
+        for ( i = 0; i < (width >> 5); i++ )
         {
-            bits = ((uint32_t)bitmap[i * entries_per_row + n] << bit_count) | bits;
-            if ( (8 * (n + 1)) <= width )
-            {
-                bit_count += 8;
-            }
-            else
-            {
-                bit_count += ((8 * (n + 1)) - width);
-            }
-            if ( bit_count > 24 )
-            {
-                bit_pattern_set(x + 8 * (n - 3), y + i, color, bit_count, bits & (0xFFFFFFFF >> (32 - bit_count)));
-                bits = 0;
-                bit_count = 0;
-            }
+            bit_pattern_set(x + i * 32, y + n, color, 32, ((uint32_t *)&(bitmap[n * entries_per_row]))[i]);
         }
-        if ( bit_count != 0 )
+
+        if ( (width - (i * 32)) > 0  )
         {
-            bit_pattern_set(x + 8 * (n - (bit_count >> 3)), y + i, color, bit_count, bits  & (0xFFFFFFFF >> (32 - bit_count)));
-            bits = 0;
-            bit_count = 0;
+            bit_pattern_set(x + i * 32, y + n, color, width - (i * 32), ((uint32_t *)&(bitmap[n * entries_per_row]))[i]);
         }
     }
 }
@@ -544,3 +461,50 @@ void fb_circle(uint16_t xc, uint16_t yc, uint16_t r, fb_color_t color)
               else p += 4*(x++ - y--) + 10;
      }
 }    
+
+
+uint16_t fb_line_storage_set(uint16_t line_number, uint8_t line_length, uint8_t *p_line)
+{
+    if ( line_number < FB_HEIGHT )
+    {
+        if ( M_ROW_UINT8_PTR(line_number) != &(p_line[0]) )
+        {
+            memcpy(M_ROW_UINT8_PTR(line_number), &(p_line[0]),
+                (line_length < M_ROW_SIZE_BYTES ? line_length : M_ROW_SIZE_BYTES));
+        }
+        dirty_flag_set(line_number);
+        
+        return ( line_number );
+    }
+
+    return ( FB_INVALID_LINE );
+}
+
+
+uint16_t fb_next_dirty_line_get(uint8_t *p_line_length, uint8_t **p_line)
+{
+    uint16_t i;
+    
+    for ( i = 0; i < BITS_COUNT_TO_UINT32_COUNT(FB_HEIGHT); i++ )
+    {
+        uint32_t tmp_u32 = m_fb.dirty_flags[i];
+        uint8_t  y       = i << 5;
+
+        while ( (y < FB_HEIGHT) && (tmp_u32 != 0) )
+        {
+            if ( tmp_u32 & 0x00000001 )
+            {
+                dirty_flag_clear(y);
+                
+                *p_line_length = M_ROW_SIZE_BYTES;
+                *p_line = M_ROW_UINT8_PTR(y);
+                return ( y );
+            }
+            
+            ++y;
+            tmp_u32 >>= 1;
+        }
+    }
+    
+    return ( FB_INVALID_LINE );
+}

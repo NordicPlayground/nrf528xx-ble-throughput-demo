@@ -133,12 +133,9 @@ uint32_t drv_mlcd_write(drv_mlcd_write_req_type_t write_req_type, uint8_t line_n
  *
  * @note Updating the lcd will be blocking calls if no callback is set.
  *
- * @param{in] drv_mlcd_fb_next_dirty_line_get  A pointer to a function that gets the next "dirty"
- *                                         line in the frame buffer.
- *
  * @retval ::HAL_SPI_STATUS_CODE_SUCCESS    if successful.
  * @retval ::HAL_SPI_STATUS_CODE_DISALLOWED if the SPI driver could not be opened. */
-uint32_t drv_mlcd_update(drv_mlcd_fb_next_dirty_line_get_t drv_mlcd_fb_next_dirty_line_get);
+uint32_t drv_mlcd_update(void);
 
 
 #endif // DRV_MLCD_H__

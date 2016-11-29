@@ -310,7 +310,7 @@
           </ArmAdsMisc>
           <Cads>
             <interw>1</interw>
-            <Optim>4</Optim>
+            <Optim>1</Optim>
             <oTime>0</oTime>
             <SplitLS>0</SplitLS>
             <OneElfS>1</OneElfS>
@@ -413,6 +413,11 @@
               <FileName>counter.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\counter.c</FilePath>
+            </File>
+            <File>
+              <FileName>my_fonts.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\my_fonts.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1158,6 +1163,26 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>nrf_drv_twi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\..\components\drivers_nrf\twi_master\nrf_drv_twi.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_drv_spi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\..\components\drivers_nrf\spi_master\nrf_drv_spi.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_drv_ppi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\..\components\drivers_nrf\ppi\nrf_drv_ppi.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_drv_timer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\..\components\drivers_nrf\timer\nrf_drv_timer.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -1990,24 +2015,14 @@
               <FilePath>..\..\..\..\display_shield_files\src\fb_util.c</FilePath>
             </File>
             <File>
-              <FileName>hal_timer.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\display_shield_files\src\hal_timer.c</FilePath>
-            </File>
-            <File>
-              <FileName>nrf_drv_spi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\display_shield_files\src\nrf_drv_spi.c</FilePath>
-            </File>
-            <File>
-              <FileName>nrf_drv_twi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\display_shield_files\src\nrf_drv_twi.c</FilePath>
-            </File>
-            <File>
               <FileName>pca63520_util.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\display_shield_files\src\pca63520_util.c</FilePath>
+            </File>
+            <File>
+              <FileName>drv_disp_engine.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\display_shield_files\src\drv_disp_engine.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -2426,6 +2441,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\counter.c</FilePath>
             </File>
+            <File>
+              <FileName>my_fonts.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\my_fonts.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -3170,6 +3190,26 @@
                   </Cads>
                 </FileArmAds>
               </FileOption>
+            </File>
+            <File>
+              <FileName>nrf_drv_twi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\..\components\drivers_nrf\twi_master\nrf_drv_twi.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_drv_spi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\..\components\drivers_nrf\spi_master\nrf_drv_spi.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_drv_ppi.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\..\components\drivers_nrf\ppi\nrf_drv_ppi.c</FilePath>
+            </File>
+            <File>
+              <FileName>nrf_drv_timer.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\..\..\..\components\drivers_nrf\timer\nrf_drv_timer.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -4002,24 +4042,14 @@
               <FilePath>..\..\..\..\display_shield_files\src\fb_util.c</FilePath>
             </File>
             <File>
-              <FileName>hal_timer.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\display_shield_files\src\hal_timer.c</FilePath>
-            </File>
-            <File>
-              <FileName>nrf_drv_spi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\display_shield_files\src\nrf_drv_spi.c</FilePath>
-            </File>
-            <File>
-              <FileName>nrf_drv_twi.c</FileName>
-              <FileType>1</FileType>
-              <FilePath>..\..\..\..\display_shield_files\src\nrf_drv_twi.c</FilePath>
-            </File>
-            <File>
               <FileName>pca63520_util.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\..\display_shield_files\src\pca63520_util.c</FilePath>
+            </File>
+            <File>
+              <FileName>drv_disp_engine.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\..\display_shield_files\src\drv_disp_engine.c</FilePath>
             </File>
           </Files>
         </Group>

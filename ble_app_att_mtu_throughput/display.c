@@ -11,6 +11,7 @@
 #include "app_util_platform.h"
 #include "drv_mlcd.h"
 #include "drv_vlcd.h"
+#include "drv_disp_engine.h"
 #include "drv_pca63520_io.h"
 #include "pca63520_util.h"
 #include "nrf_gpio.h"
@@ -41,6 +42,7 @@
 #define ARDUINO_MISO_PIN    28
 #define ARDUINO_SCK_PIN     29
 #define ARDUINO_D2          14
+#define ARDUINO_D3          15
 #define ARDUINO_D9          23
 #define ARDUINO_D10         24
 
@@ -53,6 +55,7 @@
 #define ARDUINO_MISO_PIN    (32+14)
 #define ARDUINO_SCK_PIN     (32+15)
 #define ARDUINO_D2          (32+3)
+#define ARDUINO_D3          (32+4)
 #define ARDUINO_D9          (32+11)
 #define ARDUINO_D10         (32+12)
 
@@ -65,6 +68,7 @@
 #define ARDUINO_MISO_PIN    24
 #define ARDUINO_SCK_PIN     25
 #define ARDUINO_D2          13
+#define ARDUINO_D3          14
 #define ARDUINO_D9          20
 #define ARDUINO_D10         22
 
@@ -136,9 +140,14 @@ static const drv_vlcd_cfg_t drv_vlcd_cfg =
     .spi.ss_pin     = ARDUINO_D9,
     .fb_dim.width = FB_WIDTH,
     .fb_dim.height = FB_HEIGHT,
-    .vlcd_fb_next_dirty_line_get = fb_next_dirty_line_get,
-    .vlcd_fb_line_storage_ptr_get = fb_line_storage_ptr_get,
-    .vlcd_fb_line_storage_set = fb_line_storage_set,
+};
+
+
+static const drv_disp_engine_cfg_t drv_disp_engine_cfg =
+{
+    .fb_next_dirty_line_get = fb_next_dirty_line_get,
+    .fb_line_storage_ptr_get = fb_line_storage_ptr_get,
+    .fb_line_storage_set = fb_line_storage_set,
 };
 
 
@@ -156,35 +165,25 @@ static const drv_pca63520_io_cfg_t drv_pca63520_io_cfg =
     .p_drv_sx1509_cfg  = &drv_sx1509_cfg,
 };
 
+PCA63520_UTIL_CONST_DEFAULT_CONFIG_DECLARE(ARDUINO_D2, ARDUINO_D3);
+
 static volatile bool m_vlcd_update_in_progrees = false;
 
 void drv_vlcd_sig_callback(drv_vlcd_signal_type_t drv_vlcd_signal_type)
 {
-	/*
-    static bool last_update_in_progress = false;
-    
-    if ( last_update_in_progress )
-    {
-        last_update_in_progress   = false;
-        m_vlcd_update_in_progrees = false;
-        pca63520_util_vlcd_mlcd_sync();
-    }
-    else
-    {
-		drv_vlcd_update();
-        last_update_in_progress = true;
-    }
-	*/
 	m_vlcd_update_in_progrees = false;
-        pca63520_util_vlcd_mlcd_sync();
 } 
 
 bool display_init()
 {
 	uint32_t ret_code;
 	
+	nrf_drv_ppi_init();
+    nrf_drv_gpiote_init();
+	
 	drv_23lcv_init();
-
+	drv_disp_engine_init(&drv_disp_engine_cfg);
+	
     ret_code = drv_pca63520_io_init(&drv_pca63520_io_cfg);
 	
 	if(ret_code != DRV_PCA63520_IO_STATUS_CODE_SUCCESS)
@@ -193,10 +192,11 @@ bool display_init()
 		return false;
 	}
 	
+	pca63520_util_vlcd_mlcd_sync_setup(&m_pca63520_util_cfg);
     drv_mlcd_init(&drv_mlcd_cfg);
     drv_vlcd_init(&drv_vlcd_cfg);
 
-	NVIC_SetPriority(TIMER2_IRQn, 7);
+	NVIC_SetPriority(TIMER2_IRQn, APP_IRQ_PRIORITY_HIGH);
     NVIC_EnableIRQ(TIMER2_IRQn);
 	
 	drv_pca63520_io_disp_pwr_mode_cfg(DRV_PCA63520_IO_DISP_PWR_MODE_ENABLED);
@@ -225,7 +225,7 @@ void display_draw_nordic_logo()
 void display_draw_title()
 {
 	fb_font_set(&font_calibri_18pt_info);
-	fb_string_put(TEXT_LEFT_MARGIN, 10, TITLE, FB_COLOR_BLACK);
+	fb_string_put(TEXT_LEFT_MARGIN + 5, 10, TITLE, FB_COLOR_BLACK);
 	fb_font_set(&font_calibri_14pt_info);
 }
 
@@ -235,10 +235,18 @@ void display_show()
 	{
 		return;
 	}
-	
+	/*
+	if ( !m_vlcd_update_in_progrees
+        &&   !pca63520_util_vlcd_mlcd_sync_active() )
+	{
+		m_vlcd_update_in_progrees = true;
+		drv_vlcd_update();
+	}
+	*/
 	while (pca63520_util_vlcd_mlcd_sync_active());
 	
 	drv_vlcd_update();
+	
 	pca63520_util_vlcd_mlcd_sync();
 }
 
@@ -341,7 +349,6 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	line_counter += TRANSFER_BAR_HEIGHT_IN_LINES;
 	
 	
-	
 	char str[50];
 	sprintf(str, "%dKB/%dKB transferred", transfer_data->bytes_transfered/1024, transfer_data->kb_transfer_size);
 	display_print_line_center_inc(str);
@@ -349,6 +356,33 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	//display_print_line("kbit/s", 150, line_counter);
 	sprintf(str, "Speed: %.1f Kbits/s", throughput);
 	display_print_line_center_inc(str);
+	
+	display_show();
+}
+
+void display_test_done_screen(transfer_data_t *transfer_data)
+{
+	char str[50];
+	uint16_t number_x_pos = 130;
+
+	sprintf(str, "%.2f seconds.", (float)transfer_data->counter_ticks / 32768);
+	display_print_line(str, number_x_pos, display_get_line_nr());
+	display_print_line_inc("Time:");
+	
+	sprintf(str, "%u KB (%u bytes)).", transfer_data->bytes_transfered/1024, transfer_data->bytes_transfered);
+	display_print_line(str, number_x_pos, display_get_line_nr());
+	display_print_line_inc("Transfered:");
+	
+	float sent_octet_cnt = transfer_data->bytes_transfered * 8;
+	float throughput = (float)(sent_octet_cnt * 32768) / (float)transfer_data->counter_ticks;
+	throughput = throughput / (float)1000;
+	
+	sprintf(str, "%.2f Kbits/s.", throughput);
+	display_print_line(str, number_x_pos, display_get_line_nr());
+	display_print_line_inc("Throughput:");
+	
+	display_print_line_inc("");
+	display_print_line_inc("Press any button to exit.");
 	
 	display_show();
 }

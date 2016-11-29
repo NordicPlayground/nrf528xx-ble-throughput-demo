@@ -474,7 +474,7 @@ uint32_t drv_sx1509_keyconfig_modify(uint16_t set_mask, uint16_t clr_mask);
 uint32_t drv_sx1509_keydata_get(uint16_t *p_keydata);
 
 
-/**@brief Gets the the on/off time and intensity configuration (RegTOn15, RegIOnX & RegOffX registers) of the sx1509 device.
+/**@brief Gets the the on/off time and intensity configuration (RegTOnX, RegIOnX & RegOffX registers) of the sx1509 device.
  *
  * @param[in]   pin_no      The pin number to configure.
  * @param[in]   p_onoffcfgx A pointer to where the value is to be stored.
@@ -484,7 +484,7 @@ uint32_t drv_sx1509_keydata_get(uint16_t *p_keydata);
 uint32_t drv_sx1509_onoffcfgx_get(uint8_t pin_no, uint32_t *p_onoffcfgx);
 
 
-/**@brief Modifies the on/off time and intensity configuration (RegTOn15, RegIOnX & RegOffX registers) of the sx1509 device.
+/**@brief Modifies the on/off time and intensity configuration (RegTOnX, RegIOnX & RegOffX registers) of the sx1509 device.
  *
  * @param[in]   pin_no      The pin number to configure.
  * @param[in]   set_mask    A mask specifying what bits to set.

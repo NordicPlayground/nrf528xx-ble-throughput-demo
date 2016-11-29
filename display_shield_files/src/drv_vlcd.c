@@ -11,57 +11,18 @@
  */
 #include "drv_vlcd.h"
 #include "drv_23lcv.h"
+#include "drv_disp_engine.h"
 #include "fb.h"
 #include "nrf.h"
 
 #include <stdlib.h>
 #include <string.h>
 
-
-typedef enum
-{
-    M_PROC_NONE = 0,
-    M_PROC_CLEAR,
-    M_PROC_WRITE,
-    M_PROC_READ,
-    M_PROC_UPDATE,
-    M_PROC_VLCDTOFB_COPY,
-    M_PROC_VLCDFROMFB_COPY,
-    M_PROC_DIRECT_SPI,
-} m_proc_type_t;
-
-
 static drv_vlcd_cfg_t *p_cfg;
 
 
 static struct
 {
-    enum
-    {
-        M_CMD_STATE_IDLE = 0,         ///< No command pending or in progress.
-        M_CMD_STATE_WRT_PREAMBLE,     ///< A write preamble is pending or in progress.
-        M_CMD_STATE_WRT_DATA,         ///< A data buffer write operation is pending or in progress.
-        M_CMD_STATE_WRT_POSTAMBLE,    ///< A write postamble is pending or in progress.
-        M_CMD_STATE_WRT_LAST,         ///< Last portion of the write command is pending or in progress.
-        M_CMD_STATE_WRT_COMPLETE,     ///< The write command has complete.
-        M_CMD_STATE_WRT_ERROR,        ///< An error occured while writing.
-        M_CMD_STATE_READ_PREAMBLE,    ///< A write preamble is pending or in progress.
-        M_CMD_STATE_READ_DATA,        ///< A data buffer read operation is pending or in progress.
-        M_CMD_STATE_READ_POSTAMBLE,   ///< A read postamble is pending or in progress.
-        M_CMD_STATE_READ_LAST,        ///< Last portion of the read command is pending or in progress.
-        M_CMD_STATE_READ_COMPLETE,    ///< The read command has complete.
-        M_CMD_STATE_READ_ERROR,       ///< An error occured while reading.
-    } cmd_state;
-    m_proc_type_t current_proc;
-    struct
-    {
-        uint8_t *   p_data;
-        uint8_t     start[2];
-        uint8_t     end[2];
-        uint8_t     data_length;
-        uint8_t     start_length;
-        uint8_t     end_length;
-    } buffers;
     struct
     {
         uint16_t    x0;
@@ -87,362 +48,181 @@ uint8_t  static const M_VLCD_SHORT_PADDING_FIELD_LENGTH   = 1;
 static void drv_23lcv_sig_callback(drv_23lcv_signal_type_t drv_23lcv_signal_type);
 
 
-static uint32_t cmd_handler(void);
 
-
-static uint32_t line_addr_get(uint16_t line_number)
+static uint32_t line_payload_addr_get(uint16_t line_number)
 {
     return ( M_VLCD_COMMAND_FIELD_LENGTH + (line_number * (M_VLCD_LINE_NUMBER_FIELD_LENGTH + (VLCD_WIDTH / 8) + M_VLCD_SHORT_PADDING_FIELD_LENGTH)) + M_VLCD_LINE_NUMBER_FIELD_LENGTH );
 }
 
 
-static bool begin_vlcd_access(m_proc_type_t new_proc)
+static uint32_t access_begin(drv_disp_engine_access_descr_t *p_access_descr, drv_disp_engine_proc_type_t new_proc)
+{   
+    static drv_23lcv_cfg_t cfg;
+    
+    (void)p_access_descr;
+    (void)new_proc;
+
+    cfg.spi.ss_pin     = p_cfg->spi.ss_pin;
+    cfg.spi.p_config   = p_cfg->spi.p_config;
+    cfg.spi.p_instance = p_cfg->spi.p_instance;
+
+    if ( drv_23lcv_open(&cfg) != DRV_VLCD_STATUS_CODE_SUCCESS )
+    {
+        return ( DRV_DISP_ENGINE_STATUS_CODE_DISALLOWED );
+    }
+    
+    return ( DRV_DISP_ENGINE_STATUS_CODE_SUCCESS );
+}
+
+
+static bool access_update(drv_disp_engine_access_descr_t *p_access_descr)
 {    
-    if ( (m_drv_vlcd.current_proc == M_PROC_NONE)
-    &&   (new_proc                != M_PROC_NONE) )
+    if ( p_access_descr->current_proc == DRV_DISP_ENGINE_PROC_CLEAR )
     {
-        static drv_23lcv_cfg_t cfg;
-     
-        m_drv_vlcd.current_proc = new_proc;
-        m_drv_vlcd.cmd_state    = M_CMD_STATE_IDLE;
+        if ( m_drv_vlcd.current_line_number == VLCD_HEIGHT )
+        {
+            return ( false );
+        }
+        else if ( m_drv_vlcd.current_line_number == VLCD_HEIGHT - 1 )
+        {
+            p_access_descr->buffers.postamble_length = 2;
+        }
         
-        cfg.spi.ss_pin     = p_cfg->spi.ss_pin;
-        cfg.spi.p_config   = p_cfg->spi.p_config;
-        cfg.spi.p_instance = p_cfg->spi.p_instance;
-
-        return ( drv_23lcv_open(&cfg) == DRV_VLCD_STATUS_CODE_SUCCESS );
+        if ( m_drv_vlcd.current_line_number > 0 )
+        {
+            p_access_descr->buffers.p_preamble[0] = m_drv_vlcd.current_line_number + 1;
+            p_access_descr->buffers.preamble_length = 1;
+        }
+    }
+    else if ( p_access_descr->buffers.data_length == 0 )
+    {
+        return ( false );
     }
     
-    return ( DRV_VLCD_STATUS_CODE_DISALLOWED );
+    
+    return ( true );
 }
 
 
-static bool end_vlcd_access(void)
+static uint32_t line_write(drv_disp_engine_proc_access_type_t access_type, uint16_t line_number, uint8_t *p_buf, uint8_t buf_length)
 {
-    if ( m_drv_vlcd.current_proc != M_PROC_NONE )
-    {
-        m_drv_vlcd.current_proc = M_PROC_NONE;
-        
-        return ( drv_23lcv_close() == DRV_23LCV_STATUS_CODE_SUCCESS );
-    }
+    uint16_t dest_addr;
+    int16_t size;
     
-    return ( DRV_VLCD_STATUS_CODE_DISALLOWED );
-}
-
-
-static void proc_clear_cmd_handle(void)
-{
-    uint16_t start_addr;
-    
-    switch ( m_drv_vlcd.cmd_state )
+    switch ( access_type )
     {
-        case M_CMD_STATE_WRT_PREAMBLE:
-            start_addr = line_addr_get(m_drv_vlcd.current_line_number) - m_drv_vlcd.buffers.start_length;
-            
-            m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_DATA;
-            if ( drv_23lcv_write(start_addr, &(m_drv_vlcd.buffers.start[0]), -m_drv_vlcd.buffers.start_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
+        case DRV_DISP_ENGINE_PROC_ACCESS_TYPE_PREAMBLE:
+            dest_addr = line_payload_addr_get(m_drv_vlcd.current_line_number) - M_VLCD_LINE_NUMBER_FIELD_LENGTH;
+            if ( m_drv_vlcd.current_line_number == 0 )
             {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_ERROR;
+                dest_addr -= M_VLCD_COMMAND_FIELD_LENGTH;
             }
-            
+            size = -buf_length;
             break;
-        case M_CMD_STATE_WRT_DATA:
-            m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_POSTAMBLE;
-            if ( drv_23lcv_write(DRV_23LCV_NO_ADDR, m_drv_vlcd.buffers.p_data, -m_drv_vlcd.buffers.data_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
+        case DRV_DISP_ENGINE_PROC_ACCESS_TYPE_DATA:
+            if ( line_number == FB_INVALID_LINE )
             {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_ERROR;
-            }
-            
-            break;
-        case M_CMD_STATE_WRT_POSTAMBLE:
-            m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_LAST;
-            if ( drv_23lcv_write(DRV_23LCV_NO_ADDR, &(m_drv_vlcd.buffers.end[0]),  m_drv_vlcd.buffers.end_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
-            {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_ERROR;
-            }
-            
-            break;    
-        case M_CMD_STATE_WRT_LAST:
-            ++m_drv_vlcd.current_line_number;
-            
-            if ( m_drv_vlcd.current_line_number == VLCD_HEIGHT )
-            {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_COMPLETE;
-            }
-            else 
-            {
-                if ( m_drv_vlcd.current_line_number == (VLCD_HEIGHT - 1) )
-                {
-                    m_drv_vlcd.buffers.end_length = 2;
-                }
-                
-                m_drv_vlcd.buffers.start[0]     = m_drv_vlcd.current_line_number + 1;
-                m_drv_vlcd.buffers.start_length = 1;
-                
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_PREAMBLE;
-            }
-            break;
-        default:
-            for ( ;; );
-            // break;
-    }
-}
-
-
-static void proc_write_cmd_handle(void)
-{
-    uint16_t start_addr;
-    
-    switch ( m_drv_vlcd.cmd_state )
-    {
-        case M_CMD_STATE_WRT_DATA:
-            start_addr = line_addr_get(m_drv_vlcd.current_line_number);
-            
-            m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_LAST;
-            if ( drv_23lcv_write(start_addr, m_drv_vlcd.buffers.p_data, m_drv_vlcd.buffers.data_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
-            {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_ERROR;
-            }
-            break;
-        case M_CMD_STATE_WRT_LAST:
-            m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_COMPLETE;
-            break;
-        default:
-            for ( ;; );
-            // break;
-    }
-}
-
-
-static void proc_read_cmd_handle(void)
-{
-    int16_t start_addr;
-    
-    switch ( m_drv_vlcd.cmd_state )
-    {
-        case M_CMD_STATE_READ_DATA:
-            start_addr = line_addr_get(m_drv_vlcd.current_line_number);
-
-            m_drv_vlcd.cmd_state = M_CMD_STATE_READ_LAST;
-            if ( drv_23lcv_read(m_drv_vlcd.buffers.p_data, start_addr, m_drv_vlcd.buffers.data_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
-            {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_READ_ERROR;
-            }
-            break;
-        case M_CMD_STATE_READ_LAST:
-            m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_COMPLETE;
-            break;
-        default:
-            for ( ;; );
-            // break;
-    }
-}
-
-
-static void proc_update_cmd_handle(void)
-{
-    int16_t     start_addr;
-
-    switch ( m_drv_vlcd.cmd_state )
-    {
-        case M_CMD_STATE_WRT_DATA:
-           start_addr = line_addr_get(m_drv_vlcd.fb_pos.y0 + m_drv_vlcd.current_line_number) + (m_drv_vlcd.fb_pos.x0 >> 3);
-
-            m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_LAST;
-            if ( drv_23lcv_write(start_addr, m_drv_vlcd.buffers.p_data, m_drv_vlcd.buffers.data_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
-            {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_ERROR;
-            }
-            break;
-        case M_CMD_STATE_WRT_LAST:
-            m_drv_vlcd.current_line_number = p_cfg->vlcd_fb_next_dirty_line_get(&m_drv_vlcd.buffers.data_length, &m_drv_vlcd.buffers.p_data);
-            if ( m_drv_vlcd.current_line_number != 0xFFFF )
-            {
-                start_addr = line_addr_get(m_drv_vlcd.fb_pos.y0 + m_drv_vlcd.current_line_number) + (m_drv_vlcd.fb_pos.x0 >> 3);
-                if ( drv_23lcv_write(start_addr, m_drv_vlcd.buffers.p_data, m_drv_vlcd.buffers.data_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
-                {
-                    m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_ERROR;
-                }
+                dest_addr = DRV_23LCV_NO_ADDR;
+                size = -buf_length;
             }
             else
             {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_COMPLETE;
+                dest_addr = line_payload_addr_get(m_drv_vlcd.fb_pos.y0 + line_number) + (m_drv_vlcd.fb_pos.x0 >> 3);
+                size = buf_length;
             }
             break;
-        default:
-            for ( ;; );
-            // break;
-    }
-}
-
-
-static void proc_vlcdtofb_cmd_handle(void)
-{
-    int16_t start_addr;
-    
-    switch ( m_drv_vlcd.cmd_state )
-    {
-        case M_CMD_STATE_READ_DATA:
-            start_addr = line_addr_get(m_drv_vlcd.fb_pos.y0 + m_drv_vlcd.current_line_number) + (m_drv_vlcd.fb_pos.x0 >> 3);
-
-            m_drv_vlcd.cmd_state = M_CMD_STATE_READ_LAST;
-            if ( drv_23lcv_read(m_drv_vlcd.buffers.p_data, start_addr, m_drv_vlcd.buffers.data_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
-            {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_READ_ERROR;
-            }
-            break;
-        case M_CMD_STATE_READ_LAST:
-            p_cfg->vlcd_fb_line_storage_set(m_drv_vlcd.current_line_number, m_drv_vlcd.buffers.data_length, m_drv_vlcd.buffers.p_data);
-            m_drv_vlcd.current_line_number = p_cfg->vlcd_fb_line_storage_ptr_get(m_drv_vlcd.current_line_number + 1, &m_drv_vlcd.buffers.data_length, &m_drv_vlcd.buffers.p_data);
-            if ( m_drv_vlcd.current_line_number != 0xFFFF )
-            {
-                start_addr = line_addr_get(m_drv_vlcd.fb_pos.y0 + m_drv_vlcd.current_line_number) + (m_drv_vlcd.fb_pos.x0 >> 3);
-                if ( drv_23lcv_read(m_drv_vlcd.buffers.p_data, start_addr, m_drv_vlcd.buffers.data_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
-                {
-                    m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_ERROR;
-                }
-            }
-            else
-            {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_COMPLETE;
-            }
-            break;
-        default:
-            for ( ;; );
-            // break;
-    }
-}
-
-
-static void proc_vlcdfromfb_cmd_handle(void)
-{
-    uint16_t start_addr;
-    
-    switch ( m_drv_vlcd.cmd_state )
-    {
-        case M_CMD_STATE_WRT_DATA:
-           start_addr = line_addr_get(m_drv_vlcd.fb_pos.y0 + m_drv_vlcd.current_line_number) + (m_drv_vlcd.fb_pos.x0 >> 3);
-
-            m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_LAST;
-            if ( drv_23lcv_write(start_addr, m_drv_vlcd.buffers.p_data, m_drv_vlcd.buffers.data_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
-            {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_ERROR;
-            }
-            break;
-        case M_CMD_STATE_WRT_LAST:
-            m_drv_vlcd.current_line_number = p_cfg->vlcd_fb_line_storage_ptr_get(m_drv_vlcd.current_line_number + 1, &m_drv_vlcd.buffers.data_length, &m_drv_vlcd.buffers.p_data);
-            if ( m_drv_vlcd.current_line_number != 0xFFFF )
-            {
-                start_addr = line_addr_get(m_drv_vlcd.fb_pos.y0 + m_drv_vlcd.current_line_number) + (m_drv_vlcd.fb_pos.x0 >> 3);
-                if ( drv_23lcv_write(start_addr, m_drv_vlcd.buffers.p_data, m_drv_vlcd.buffers.data_length) != DRV_23LCV_STATUS_CODE_SUCCESS )
-                {
-                    m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_ERROR;
-                }
-            }
-            else
-            {
-                m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_COMPLETE;
-            }
-            break;
-        default:
-            for ( ;; );
-            // break;
-    }
-}
-
-
-static uint32_t cmd_handler(void)
-{
-    uint32_t    result  = DRV_VLCD_STATUS_CODE_SUCCESS;
-    bool        done    = (m_drv_vlcd.current_sig_callback != NULL);
-
-    do
-    {
-        switch ( m_drv_vlcd.current_proc )
-        {
-            case M_PROC_CLEAR:
-                proc_clear_cmd_handle();
-                break;
-            case M_PROC_WRITE:
-                proc_write_cmd_handle();
-                break;
-            case M_PROC_READ:
-                proc_read_cmd_handle();
-                break;
-            case M_PROC_UPDATE:
-                proc_update_cmd_handle();
-                break;
-            case M_PROC_VLCDTOFB_COPY:
-                proc_vlcdtofb_cmd_handle();
-                break;
-            case M_PROC_VLCDFROMFB_COPY:
-                proc_vlcdfromfb_cmd_handle();
-                break;
-            case M_PROC_NONE:
-            default:
-                for ( ;; );
-                // break;
-        }
+        case DRV_DISP_ENGINE_PROC_ACCESS_TYPE_POSTAMBLE:
+            dest_addr = DRV_23LCV_NO_ADDR;
+            size = buf_length;
         
-        if ( (m_drv_vlcd.cmd_state == M_CMD_STATE_WRT_COMPLETE)
-        ||   (m_drv_vlcd.cmd_state == M_CMD_STATE_READ_COMPLETE) )
-        {
-            m_proc_type_t latest_proc = m_drv_vlcd.current_proc;
-            (void)end_vlcd_access();
-            done = true;
+            m_drv_vlcd.current_line_number += 1;
+            break;
+    }
 
-            if ( m_drv_vlcd.current_sig_callback != NULL )
-            {
-                switch ( latest_proc )
-                {
-                    case M_PROC_CLEAR:
-                        m_drv_vlcd.current_sig_callback(DRV_VLCD_SIGNAL_TYPE_CLEARED);
-                        break;
-                    case M_PROC_UPDATE:
-                    case M_PROC_WRITE:
-                    case M_PROC_VLCDFROMFB_COPY:
-                        m_drv_vlcd.current_sig_callback(DRV_VLCD_SIGNAL_TYPE_WRITE_COMPLETE);
-                        break;
-                    case M_PROC_VLCDTOFB_COPY:
-                    case M_PROC_READ:
-                        m_drv_vlcd.current_sig_callback(DRV_VLCD_SIGNAL_TYPE_READ_COMPLETE);
-                        break;
-                    case M_PROC_NONE:
-                    default:
-                        for ( ;; );
-                        // break;
-                }
-            }
-        }
-        else if ( (m_drv_vlcd.cmd_state == M_CMD_STATE_WRT_ERROR)
-        ||        (m_drv_vlcd.cmd_state == M_CMD_STATE_READ_ERROR) )
-        {
-            (void)end_vlcd_access();
-            result = DRV_VLCD_STATUS_CODE_DISALLOWED;
-            done = true;
-            
-            if ( m_drv_vlcd.current_sig_callback != NULL )
-            {
-                m_drv_vlcd.current_sig_callback(DRV_VLCD_SIGNAL_TYPE_ERROR);
-            }
-        }
-    } while ( !done );
+    if ( drv_23lcv_write(dest_addr, p_buf, size) != DRV_23LCV_STATUS_CODE_SUCCESS )
+    {
+        return ( DRV_DISP_ENGINE_STATUS_CODE_DISALLOWED );
+    }
     
-    return ( result );
+    return ( DRV_DISP_ENGINE_STATUS_CODE_SUCCESS );
 }
+
+
+static uint32_t line_read(drv_disp_engine_proc_access_type_t access_type, uint8_t *p_buf, uint16_t line_number, uint8_t length)
+{
+    while ( access_type != DRV_DISP_ENGINE_PROC_ACCESS_TYPE_DATA ); // Only payload should ever be read.
+    
+    if ( drv_23lcv_read(p_buf, line_payload_addr_get(m_drv_vlcd.fb_pos.y0 + line_number) + (m_drv_vlcd.fb_pos.x0 >> 3), length) != DRV_23LCV_STATUS_CODE_SUCCESS )
+    {
+        return ( DRV_DISP_ENGINE_STATUS_CODE_DISALLOWED );
+    }
+    
+    return ( DRV_DISP_ENGINE_STATUS_CODE_SUCCESS );
+}
+
+
+static uint32_t access_end(void)
+{
+    if ( drv_23lcv_close() != DRV_23LCV_STATUS_CODE_SUCCESS )
+    {
+        return ( DRV_DISP_ENGINE_STATUS_CODE_DISALLOWED );
+    }
+    
+    return ( DRV_DISP_ENGINE_STATUS_CODE_SUCCESS );
+}
+
+
+static drv_disp_engine_user_cfg_t user_cfg =
+{
+    .access_begin  = access_begin,
+    .line_write    = line_write,
+    .line_read     = line_read,
+    .access_update = access_update,
+    .access_end    = access_end,
+};
 
 
 static void drv_23lcv_sig_callback(drv_23lcv_signal_type_t drv_23lcv_signal_type)
 {
-    (void)cmd_handler();
+    drv_disp_engine_proc_drive_info_t drive_info;
+    
+    drv_disp_engine_proc_drive(DRV_DISP_ENGINE_PROC_DRIVE_TYPE_TICK, &drive_info);
+    
+    if ( drive_info.exit_status == DRV_DISP_ENGINE_PROC_DRIVE_EXIT_STATUS_COMPLETE )
+    {
+        switch ( drive_info.proc_type )
+        {
+            case DRV_DISP_ENGINE_PROC_CLEAR:
+                m_drv_vlcd.current_sig_callback(DRV_VLCD_SIGNAL_TYPE_CLEARED);
+                break;
+            case DRV_DISP_ENGINE_PROC_WRITE:
+            case DRV_DISP_ENGINE_PROC_UPDATE:
+            case DRV_DISP_ENGINE_PROC_FROMFBCPY:
+                m_drv_vlcd.current_sig_callback(DRV_VLCD_SIGNAL_TYPE_WRITE_COMPLETE);
+                break;
+            case DRV_DISP_ENGINE_PROC_READ:
+            case DRV_DISP_ENGINE_PROC_TOFBCPY:
+                m_drv_vlcd.current_sig_callback(DRV_VLCD_SIGNAL_TYPE_READ_COMPLETE);
+                break;
+            default:
+                for ( ;; );
+                //break;
+        };
+    }
+    else if ( drive_info.exit_status == DRV_DISP_ENGINE_PROC_DRIVE_EXIT_STATUS_PAUSE )
+    {
+        m_drv_vlcd.current_sig_callback(DRV_VLCD_SIGNAL_TYPE_PAUSE);
+    }
+    else if ( drive_info.exit_status == DRV_DISP_ENGINE_PROC_DRIVE_EXIT_STATUS_ERROR )
+    {
+        m_drv_vlcd.current_sig_callback(DRV_VLCD_SIGNAL_TYPE_ERROR);
+    }
 }
 
 
 void drv_vlcd_init(drv_vlcd_cfg_t const * const p_vlcd_cfg)
 {
     p_cfg = (drv_vlcd_cfg_t *)p_vlcd_cfg;
-    
-    m_drv_vlcd.current_proc = M_PROC_NONE;
     
     m_drv_vlcd.current_output_mode = DRV_VLCD_OUTPUT_MODE_DISABLED;
     
@@ -467,43 +247,27 @@ void drv_vlcd_callback_set(drv_vlcd_sig_callback_t drv_vlcd_sig_callback)
 
 static uint32_t vlcd_proc_vlcdfromfb_copy(void)
 {
-    if ( begin_vlcd_access(M_PROC_VLCDFROMFB_COPY) )
-    {
-        m_drv_vlcd.current_line_number = p_cfg->vlcd_fb_line_storage_ptr_get(0, &m_drv_vlcd.buffers.data_length, &m_drv_vlcd.buffers.p_data);
-        if ( m_drv_vlcd.current_line_number != 0xFFFF )
-        {
-            m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_DATA;
-            
-            return ( cmd_handler() );
-        }
-        else
-        {
-            (void)end_vlcd_access();
-        }
+    if ( drv_disp_engine_proc_initiate(&user_cfg, DRV_DISP_ENGINE_PROC_FROMFBCPY, NULL) == DRV_DISP_ENGINE_STATUS_CODE_SUCCESS )
+    {   
+        m_drv_vlcd.current_line_number      = FB_INVALID_LINE;
+        
+        return ( drv_disp_engine_proc_drive((m_drv_vlcd.current_sig_callback != NULL) ? DRV_DISP_ENGINE_PROC_DRIVE_TYPE_TICK : DRV_DISP_ENGINE_PROC_DRIVE_TYPE_BLOCKING, NULL) );    
     }
     
-    return ( DRV_VLCD_STATUS_CODE_DISALLOWED );
+    return ( DRV_DISP_ENGINE_STATUS_CODE_DISALLOWED );
 }
 
 
 static uint32_t vlcd_proc_vlcdtofb_copy(void)
 {
-    if ( begin_vlcd_access(M_PROC_VLCDTOFB_COPY) )
-    {
-        m_drv_vlcd.current_line_number = p_cfg->vlcd_fb_line_storage_ptr_get(0, &m_drv_vlcd.buffers.data_length, &m_drv_vlcd.buffers.p_data);
-        if ( m_drv_vlcd.current_line_number != 0xFFFF )
-        {
-            m_drv_vlcd.cmd_state = M_CMD_STATE_READ_DATA;
-            
-            return ( cmd_handler() );
-        }
-        else
-        {
-            (void)end_vlcd_access();
-        }
+    if ( drv_disp_engine_proc_initiate(&user_cfg, DRV_DISP_ENGINE_PROC_TOFBCPY, NULL) == DRV_DISP_ENGINE_STATUS_CODE_SUCCESS )
+    {   
+        m_drv_vlcd.current_line_number      = FB_INVALID_LINE;
+        
+        return ( drv_disp_engine_proc_drive((m_drv_vlcd.current_sig_callback != NULL) ? DRV_DISP_ENGINE_PROC_DRIVE_TYPE_TICK : DRV_DISP_ENGINE_PROC_DRIVE_TYPE_BLOCKING, NULL) );    
     }
     
-    return ( DRV_VLCD_STATUS_CODE_DISALLOWED );
+    return ( DRV_DISP_ENGINE_STATUS_CODE_DISALLOWED );
 }
 
 
@@ -541,8 +305,7 @@ uint32_t drv_vlcd_output_mode_set(drv_vlcd_output_mode_t output_mode)
             if ( m_drv_vlcd.current_output_mode == DRV_VLCD_OUTPUT_MODE_DISABLED )
             {
                 drv_23lcv_callback_set(NULL);
-            
-                if ( (begin_vlcd_access(M_PROC_DIRECT_SPI))
+                if ( (access_begin(NULL, DRV_DISP_ENGINE_PROC_NONE) == DRV_DISP_ENGINE_STATUS_CODE_SUCCESS)
                 &&   (drv_23lcv_read(NULL, 0, 0) == DRV_23LCV_STATUS_CODE_SUCCESS) )
                 {
                     m_drv_vlcd.current_output_mode = DRV_VLCD_OUTPUT_MODE_DIRECT_SPI;
@@ -554,7 +317,8 @@ uint32_t drv_vlcd_output_mode_set(drv_vlcd_output_mode_t output_mode)
             if ( (m_drv_vlcd.current_output_mode == DRV_VLCD_OUTPUT_MODE_DIRECT_SPI)
             &&   (drv_23lcv_read(NULL, DRV_23LCV_NO_ADDR, 0) == DRV_23LCV_STATUS_CODE_SUCCESS) )
             {
-                (void)end_vlcd_access();
+                (void)access_end();
+                
                 drv_23lcv_callback_set((m_drv_vlcd.current_sig_callback != NULL) ? drv_23lcv_sig_callback : NULL);
                 m_drv_vlcd.current_output_mode = DRV_VLCD_OUTPUT_MODE_DISABLED;
                 return ( DRV_VLCD_STATUS_CODE_SUCCESS );
@@ -570,19 +334,11 @@ uint32_t drv_vlcd_output_mode_set(drv_vlcd_output_mode_t output_mode)
 
 uint32_t drv_vlcd_update(void)
 {
-    if ( begin_vlcd_access(M_PROC_UPDATE) )
-    {
-        m_drv_vlcd.current_line_number = p_cfg->vlcd_fb_next_dirty_line_get(&m_drv_vlcd.buffers.data_length, &m_drv_vlcd.buffers.p_data);
-        if ( m_drv_vlcd.current_line_number != 0xFFFF )
-        {
-            m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_DATA;
-            
-            return ( cmd_handler() );
-        }
-        else
-        {
-            (void)end_vlcd_access();
-        }
+    if ( drv_disp_engine_proc_initiate(&user_cfg, DRV_DISP_ENGINE_PROC_UPDATE, NULL) == DRV_DISP_ENGINE_STATUS_CODE_SUCCESS )
+    {   
+        m_drv_vlcd.current_line_number      = FB_INVALID_LINE;
+        
+        return ( drv_disp_engine_proc_drive((m_drv_vlcd.current_sig_callback != NULL) ? DRV_DISP_ENGINE_PROC_DRIVE_TYPE_TICK : DRV_DISP_ENGINE_PROC_DRIVE_TYPE_BLOCKING, NULL) );    
     }
     
     return ( DRV_VLCD_STATUS_CODE_DISALLOWED );
@@ -591,15 +347,15 @@ uint32_t drv_vlcd_update(void)
 
 uint32_t drv_vlcd_write(uint8_t line_number, uint8_t line_length, uint8_t *p_line)
 {
-    if (begin_vlcd_access(M_PROC_WRITE))
-    {
-        m_drv_vlcd.current_line_number = line_number;
-        m_drv_vlcd.buffers.p_data      = &(p_line[0]);
-        m_drv_vlcd.buffers.data_length = line_length;
+    drv_disp_engine_access_descr_t * p_access_descr;
+
+    if ( drv_disp_engine_proc_initiate(&user_cfg, DRV_DISP_ENGINE_PROC_WRITE, &p_access_descr) == DRV_DISP_ENGINE_STATUS_CODE_SUCCESS )
+    {   
+        p_access_descr->buffers.p_data      = p_line;
+        p_access_descr->buffers.data_length = line_length;
+        m_drv_vlcd.current_line_number      = line_number;
         
-        m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_DATA;
-        
-        return (  cmd_handler() );
+        return ( drv_disp_engine_proc_drive((m_drv_vlcd.current_sig_callback != NULL) ? DRV_DISP_ENGINE_PROC_DRIVE_TYPE_TICK : DRV_DISP_ENGINE_PROC_DRIVE_TYPE_BLOCKING, NULL) );    
     }
     
     return ( DRV_VLCD_STATUS_CODE_DISALLOWED );
@@ -608,15 +364,15 @@ uint32_t drv_vlcd_write(uint8_t line_number, uint8_t line_length, uint8_t *p_lin
 
 uint32_t drv_vlcd_read(uint8_t line_number, uint8_t line_length, uint8_t *p_line)
 {
-    if (begin_vlcd_access(M_PROC_READ))
-    {
-        m_drv_vlcd.current_line_number = line_number;
-        m_drv_vlcd.buffers.p_data      = &(p_line[0]);
-        m_drv_vlcd.buffers.data_length = line_length;
+    drv_disp_engine_access_descr_t * p_access_descr;
+    
+    if ( drv_disp_engine_proc_initiate(&user_cfg, DRV_DISP_ENGINE_PROC_READ, &p_access_descr) == DRV_DISP_ENGINE_STATUS_CODE_SUCCESS )
+    {   
+        p_access_descr->buffers.p_data      = p_line;
+        p_access_descr->buffers.data_length = line_length;
+        m_drv_vlcd.current_line_number      = line_number;
         
-        m_drv_vlcd.cmd_state = M_CMD_STATE_READ_DATA;
-        
-        return (  cmd_handler() );
+        return ( drv_disp_engine_proc_drive((m_drv_vlcd.current_sig_callback != NULL) ? DRV_DISP_ENGINE_PROC_DRIVE_TYPE_TICK : DRV_DISP_ENGINE_PROC_DRIVE_TYPE_BLOCKING, NULL) );    
     }
     
     return ( DRV_VLCD_STATUS_CODE_DISALLOWED );
@@ -625,27 +381,37 @@ uint32_t drv_vlcd_read(uint8_t line_number, uint8_t line_length, uint8_t *p_line
 
 uint32_t drv_vlcd_clear(drv_vlcd_color_t bg_color)
 {
-    static uint8_t buffer[VLCD_WIDTH / 8];
+    static uint8_t m_one_line_vlcd[M_VLCD_COMMAND_FIELD_LENGTH + M_VLCD_LINE_NUMBER_FIELD_LENGTH + (VLCD_WIDTH / 8) + (2 * M_VLCD_PADDING)];
     
-    if ( begin_vlcd_access(M_PROC_CLEAR) )
+    drv_disp_engine_access_descr_t * p_access_descr;
+    
+    if ( drv_disp_engine_proc_initiate(&user_cfg, DRV_DISP_ENGINE_PROC_CLEAR, &p_access_descr) == DRV_DISP_ENGINE_STATUS_CODE_SUCCESS )
     {
-        m_drv_vlcd.current_line_number = 0;
-                
-        m_drv_vlcd.buffers.start[0]     = M_VLCD_WR;
-        m_drv_vlcd.buffers.start[1]     = m_drv_vlcd.current_line_number + 1;
-        m_drv_vlcd.buffers.start_length = 2;
-        
-        memset(&(buffer[0]), (bg_color == DRV_VLCD_COLOR_BLACK) ? 0x00 : 0xFF, VLCD_WIDTH / 8);
-        m_drv_vlcd.buffers.p_data      = &(buffer[0]);
-        m_drv_vlcd.buffers.data_length = VLCD_WIDTH / 8;
-        
-        m_drv_vlcd.buffers.end[0]     = M_VLCD_PADDING;
-        m_drv_vlcd.buffers.end[1]     = M_VLCD_PADDING;
-        m_drv_vlcd.buffers.end_length = 1;
+        uint8_t idx;    
 
-        m_drv_vlcd.cmd_state = M_CMD_STATE_WRT_PREAMBLE;
+        m_drv_vlcd.current_line_number = 0;
         
-        return ( cmd_handler() );    
+        idx = 0;
+        m_one_line_vlcd[idx] = M_VLCD_WR;
+        idx += M_VLCD_COMMAND_FIELD_LENGTH;
+        m_one_line_vlcd[idx] = 1;
+        idx += M_VLCD_LINE_NUMBER_FIELD_LENGTH;
+        memset(&(m_one_line_vlcd[idx]), (bg_color == DRV_VLCD_COLOR_BLACK) ? 0x00 : 0xFF, VLCD_WIDTH / 8);
+        idx += VLCD_WIDTH / 8;
+        m_one_line_vlcd[idx++] = M_VLCD_PADDING;
+        m_one_line_vlcd[idx  ] = M_VLCD_PADDING;
+    
+        idx = 0;
+        p_access_descr->buffers.p_preamble          = &(m_one_line_vlcd[idx]);
+        p_access_descr->buffers.preamble_length     = M_VLCD_COMMAND_FIELD_LENGTH + M_VLCD_LINE_NUMBER_FIELD_LENGTH;
+        idx += p_access_descr->buffers.preamble_length;
+        p_access_descr->buffers.p_data              = &(m_one_line_vlcd[idx]);
+        p_access_descr->buffers.data_length         = VLCD_WIDTH / 8;
+        idx += p_access_descr->buffers.data_length;
+        p_access_descr->buffers.p_postamble         = &(m_one_line_vlcd[idx]);
+        p_access_descr->buffers.postamble_length    = 1;
+        
+        return ( drv_disp_engine_proc_drive((m_drv_vlcd.current_sig_callback != NULL) ? DRV_DISP_ENGINE_PROC_DRIVE_TYPE_TICK : DRV_DISP_ENGINE_PROC_DRIVE_TYPE_BLOCKING, NULL) );    
     }
     
     return ( DRV_VLCD_STATUS_CODE_DISALLOWED );
