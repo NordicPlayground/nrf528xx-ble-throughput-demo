@@ -11099,6 +11099,15 @@ const font_info_t font_name = FONTS_ARIAL_20PT_INFO
     fonts_arial_20pt_descriptors, /*  Character descriptor array. */\
     fonts_arial_20pt_bitmaps, /* Character bitmap array. */\
 }
+
+/* 
+**  Font data for Calibri 14pt
+*/
+
+/* Font data for Calibri 14pt */
+extern const font_info_t font_calibri_14pt_info;
+extern const font_info_t font_calibri_18pt_info;
+
 #endif // FONTS_H__
 
 

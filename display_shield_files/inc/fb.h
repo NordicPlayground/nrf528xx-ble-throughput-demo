@@ -48,6 +48,8 @@ typedef enum
 } fb_color_t;
 
 
+uint16_t calc_string_width(char *str);
+
 /**@brief Resets the framebuffer.
  *
  * @param color The default color of the pixels in the framebuffer.

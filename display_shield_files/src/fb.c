@@ -262,7 +262,8 @@ static uint8_t m_put_char(uint16_t x, uint16_t y, char ch, fb_color_t color)
             uint8_t char_idx                         = ch - m_fb.p_default_font->start_char;
             uint8_t const * const p_descr_entry_base = &(m_fb.p_default_font->p_descriptor[m_fb.p_default_font->descr_entry_size * char_idx]);
             
-            width  = ( m_fb.p_default_font->width  != -1 ) ? m_fb.p_default_font->width  : p_descr_entry_base[j++];
+            width  = ( m_fb.p_default_font->width  != -1 ) ? m_fb.p_default_font->width  : *((__packed uint16_t *)&(p_descr_entry_base[j]));
+			j += 2;
             height = ( m_fb.p_default_font->height != -1 ) ? m_fb.p_default_font->height : p_descr_entry_base[j++];
             offset = ( m_fb.p_default_font->offset != -1 ) ? m_fb.p_default_font->offset * char_idx : *((__packed uint16_t *)&(p_descr_entry_base[j]));
         }
@@ -307,6 +308,20 @@ void fb_string_put(uint16_t x, uint16_t y, char *str, fb_color_t color)
         
         current_x += width + ((m_fb.p_default_font->width == -1) ? 1 : 0); // Add one pixel for fonts with dynamic width.
     }
+}
+
+uint16_t calc_string_width(char *str)
+{
+	uint16_t line_width = 0;
+	uint8_t char_counter = 0;
+	while(str[char_counter] != '\0')
+	{
+		uint8_t char_idx = str[char_counter] - m_fb.p_default_font->start_char;
+		uint8_t const * const p_descr_entry_base = &(m_fb.p_default_font->p_descriptor[m_fb.p_default_font->descr_entry_size * char_idx]);
+		line_width += *((__packed uint16_t *)&(p_descr_entry_base[0]));
+		char_counter++;
+	}
+	return line_width;
 }
 
 
