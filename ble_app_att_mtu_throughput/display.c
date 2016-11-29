@@ -21,9 +21,12 @@
 #include "fb.h"
 #include "fb_util.h"
 
-#define TEXT_HEIGHT 26
-#define TEXT_INLINE	15
-#define TRANSFER_BAR_LENGTH 200
+#define TEXT_LEFT_MARGIN 				2
+#define TEXT_HEIGHT 					20
+#define TRANSFER_BAR_LENGTH 			300
+#define TRANSFER_BAR_HEIGHT_IN_LINES 	2
+#define TEXT_START_YPOS 				44
+#define TITLE 							"BLE THROUGHPUT DEMO"
 
 #ifndef MLCD_PCA63520_2INCH7
 #error "Runs only on the PCA63520 board."
@@ -153,23 +156,28 @@ static const drv_pca63520_io_cfg_t drv_pca63520_io_cfg =
     .p_drv_sx1509_cfg  = &drv_sx1509_cfg,
 };
 
-void m_mlcd_shield_demo2(void)
+static volatile bool m_vlcd_update_in_progrees = false;
+
+void drv_vlcd_sig_callback(drv_vlcd_signal_type_t drv_vlcd_signal_type)
 {
-    fb_reset(FB_COLOR_WHITE);
-    fb_string_put(4, 10, "Hello", FB_COLOR_BLACK);
+	/*
+    static bool last_update_in_progress = false;
     
-    fb_string_put(4, 10 + 26*2, "Progress", FB_COLOR_BLACK);
-    fb_rectangle(4, 10+26-1, 4+100, 10+26*2 - 1, FB_COLOR_BLACK);
-    
-    for(int i = 0; i < 100; i++)
+    if ( last_update_in_progress )
     {
-        fb_bar(4, 10+26 - 1, 4+i, 10+26*2 - 1, FB_COLOR_BLACK);
-        drv_vlcd_update();
-    
+        last_update_in_progress   = false;
+        m_vlcd_update_in_progrees = false;
         pca63520_util_vlcd_mlcd_sync();
-        while (pca63520_util_vlcd_mlcd_sync_active());
     }
-}
+    else
+    {
+		drv_vlcd_update();
+        last_update_in_progress = true;
+    }
+	*/
+	m_vlcd_update_in_progrees = false;
+        pca63520_util_vlcd_mlcd_sync();
+} 
 
 bool display_init()
 {
@@ -197,66 +205,12 @@ bool display_init()
 	
     drv_mlcd_clear();
     drv_vlcd_clear(DRV_VLCD_COLOR_WHITE);
+	//drv_vlcd_callback_set(drv_vlcd_sig_callback);
+	
+	fb_font_set(&font_calibri_14pt_info);
+	
 	m_display_connected = true;
 	return true;
-}
-
-void display_test()
-{
-	display_init();
-	if(!m_display_connected)
-	{
-		return;
-	}
-	m_mlcd_shield_demo2();
-}
-
-void display_show()
-{
-	if(!m_display_connected)
-	{
-		return;
-	}
-	drv_vlcd_update();
-    
-	pca63520_util_vlcd_mlcd_sync();
-	while (pca63520_util_vlcd_mlcd_sync_active());
-}
-
-static uint8_t line_counter = 0;
-
-void display_clear()
-{
-	if(!m_display_connected)
-	{
-		return;
-	}
-	line_counter = 0;
-	fb_reset(FB_COLOR_WHITE);
-	display_draw_nordic_logo();
-}
-
-//TODO: print multiple lines i line exceeds width of display
-void display_print_line_inc(char * line)
-{
-	if(!m_display_connected)
-	{
-		return;
-	}
-	if(line_counter < 9)
-	{
-		fb_string_put(0, line_counter * TEXT_HEIGHT, line, FB_COLOR_BLACK);
-		line_counter ++;
-	}
-}
-
-void display_print_line(char * line, uint32_t x_pos, uint8_t line_nr)
-{
-	if(!m_display_connected)
-	{
-		return;
-	}
-	fb_string_put(x_pos, line_nr * TEXT_HEIGHT, line, FB_COLOR_BLACK);
 }
 
 void display_draw_nordic_logo()
@@ -268,50 +222,133 @@ void display_draw_nordic_logo()
 	fb_bitmap_put(400-(80+10), 0, &(nordic_logo_image[0]), 80, 41, FB_COLOR_BLACK);
 }
 
+void display_draw_title()
+{
+	fb_font_set(&font_calibri_18pt_info);
+	fb_string_put(TEXT_LEFT_MARGIN, 10, TITLE, FB_COLOR_BLACK);
+	fb_font_set(&font_calibri_14pt_info);
+}
+
+void display_show()
+{
+	if(!m_display_connected)
+	{
+		return;
+	}
+	
+	while (pca63520_util_vlcd_mlcd_sync_active());
+	
+	drv_vlcd_update();
+	pca63520_util_vlcd_mlcd_sync();
+}
+
+static uint8_t line_counter = 0;
+
+uint8_t display_get_line_nr()
+{
+	return line_counter;
+}
+
+void display_clear()
+{
+	if(!m_display_connected)
+	{
+		return;
+	}
+	line_counter = 0;
+	fb_reset(FB_COLOR_WHITE);
+	display_draw_nordic_logo();
+	display_draw_title();
+	fb_line(0, TEXT_START_YPOS - 2, FB_UTIL_LCD_WIDTH, TEXT_START_YPOS - 2, FB_COLOR_BLACK);
+}
+
+//TODO: print multiple lines i line exceeds width of display
+void display_print_line_inc(char * line)
+{
+	if(!m_display_connected)
+	{
+		return;
+	}
+	if(line_counter < 9)
+	{
+		line_counter++;
+		fb_string_put(TEXT_LEFT_MARGIN, (line_counter - 1) * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
+	}
+}
+
+//TODO
+void display_print_line_center_inc(char * line)
+{
+	if(!m_display_connected)
+	{
+		return;
+	}
+	if(line_counter < 9)
+	{
+		uint16_t x_pos = (FB_UTIL_LCD_WIDTH - calc_string_width(line)) / 2;
+		line_counter++;
+		fb_string_put(x_pos, (line_counter - 1) * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
+	}
+}
+
+void display_print_line(char * line, uint32_t x_pos, uint8_t line_nr)
+{
+	if(!m_display_connected)
+	{
+		return;
+	}
+	fb_string_put(x_pos + TEXT_LEFT_MARGIN, line_nr * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
+}
+
 void display_draw_test_run_screen(transfer_data_t *transfer_data)
 {
 	if(!m_display_connected)
 	{
 		return;
 	}
-	static float last_timems = 0;
-	static uint16_t last_kB_transferred = 0;
+	static uint32_t last_counter_ticks = 0;
+	static uint32_t last_bytes_transferred = 0;
 	
-	if(transfer_data->kB_transfered == 1)
-	{
-		//first time the function is called during a transfer
-		last_timems = 0;
-		last_kB_transferred = 0;
-	}
+	static float throughput = 0;
 	
-	float throughput = 0;
-	float timems = (float)(counter_get());
-	if(timems != 0)
+	//if time is too small the accuracy of the throughput calculation is too bad
+	if(transfer_data->counter_ticks != 0 && (transfer_data->counter_ticks - last_counter_ticks) > 10000)
 	{
-		uint32_t sent_kbits = (transfer_data->kB_transfered - last_kB_transferred) * 8;
-		throughput = (float)(sent_kbits *1024 * 100 / 1000) / (timems - last_timems);
+		float sent_bits = (transfer_data->bytes_transfered - last_bytes_transferred) * 8;
+		throughput = (float)(sent_bits * 32768 / 1000) / (transfer_data->counter_ticks - last_counter_ticks);
 		
-		last_kB_transferred = transfer_data->kB_transfered;
-		last_timems = timems;
+		last_bytes_transferred = transfer_data->bytes_transfered;
+		last_counter_ticks = transfer_data->counter_ticks;
 	}
 	
 	display_clear();
 	
-	display_print_line_inc("Transferring data:");
+	display_print_line_center_inc("Transferring data:");
+	
 	
 	//print filled bar
-	fb_rectangle(0, line_counter*TEXT_HEIGHT, TRANSFER_BAR_LENGTH, line_counter*2*TEXT_HEIGHT-1, FB_COLOR_BLACK);
+	fb_rectangle((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
+				line_counter*TEXT_HEIGHT + TEXT_START_YPOS, 
+				(FB_UTIL_LCD_WIDTH + TRANSFER_BAR_LENGTH)/2, 
+				line_counter*(TRANSFER_BAR_HEIGHT_IN_LINES+1)*TEXT_HEIGHT-1 + TEXT_START_YPOS, 
+				FB_COLOR_BLACK);
 	
-	fb_bar(0, line_counter*TEXT_HEIGHT, (uint32_t)transfer_data->kB_transfered*TRANSFER_BAR_LENGTH / transfer_data->kb_transfer_size, line_counter*2*TEXT_HEIGHT-1, FB_COLOR_BLACK);
-	line_counter++;
+	fb_bar((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
+			line_counter*TEXT_HEIGHT + TEXT_START_YPOS,
+			(FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2 + (uint32_t)(transfer_data->bytes_transfered/1024)*TRANSFER_BAR_LENGTH / transfer_data->kb_transfer_size, 
+			line_counter*(TRANSFER_BAR_HEIGHT_IN_LINES+1)*TEXT_HEIGHT-1 + TEXT_START_YPOS, 
+			FB_COLOR_BLACK);
+	line_counter += TRANSFER_BAR_HEIGHT_IN_LINES;
+	
+	
 	
 	char str[50];
-	sprintf(str, "%dKB/%dKB transferred", transfer_data->kB_transfered, transfer_data->kb_transfer_size);
-	display_print_line_inc(str);
+	sprintf(str, "%dKB/%dKB transferred", transfer_data->bytes_transfered/1024, transfer_data->kb_transfer_size);
+	display_print_line_center_inc(str);
 	
 	//display_print_line("kbit/s", 150, line_counter);
 	sprintf(str, "Speed: %.1f Kbits/s", throughput);
-	display_print_line_inc(str);
+	display_print_line_center_inc(str);
 	
 	display_show();
 }

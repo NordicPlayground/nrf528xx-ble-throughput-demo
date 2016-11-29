@@ -49,7 +49,7 @@
 #define TIMER_OP_QUEUE_SIZE     4                                   /**< Size of timer operation queues. */
 
 #define ATT_MTU_DEFAULT         247                                 /**< Default ATT MTU size, in bytes. */
-#define CONN_INTERVAL_DEFAULT   MSEC_TO_UNITS(200, UNIT_1_25_MS)     /**< Default connection interval used at connection establishment by central side. */
+#define CONN_INTERVAL_DEFAULT   MSEC_TO_UNITS(50, UNIT_1_25_MS)     /**< Default connection interval used at connection establishment by central side. */
 
 #define CONN_INTERVAL_MIN       MSEC_TO_UNITS(7.5, UNIT_1_25_MS)    /**< Minimum acceptable connection interval, in 1.25 ms units. */
 #define CONN_INTERVAL_MAX       MSEC_TO_UNITS(500, UNIT_1_25_MS)    /**< Maximum acceptable connection interval, in 1.25 ms units. */
@@ -63,7 +63,7 @@
 #define LED_SCANNING_ADVERTISING  BSP_BOARD_LED_0
 #define LED_READY                 BSP_BOARD_LED_1
 #define LED_PROGRESS              BSP_BOARD_LED_2
-#define LED_FINISHED              BSP_BOARD_LED_3
+//#define LED_FINISHED              BSP_BOARD_LED_3
 
 #define YES     'y'
 #define ONE     '1'
@@ -121,7 +121,7 @@ uint8_t m_button = 0xff;
 static volatile bool 			m_display_show = false;
 static volatile bool 			m_display_show_transfer_data = false;
 static volatile bool			m_transfer_done = false;
-static transfer_data_t			m_transfer_data = {.kb_transfer_size = (AMT_BYTE_TRANSFER_CNT/1024), .kB_transfered = 0};
+static transfer_data_t			m_transfer_data = {.kb_transfer_size = (AMT_BYTE_TRANSFER_CNT_DEFAULT/1024), .bytes_transfered = 0};
 
 /**@brief Variable length data encapsulation in terms of length and pointer to data. */
 typedef struct
@@ -133,6 +133,7 @@ typedef struct
 static nrf_ble_amtc_t m_amtc;
 static nrf_ble_amts_t m_amts;
 
+static bool volatile m_counter_started = false;
 static bool volatile m_run_test;
 static bool volatile m_print_menu;
 static bool volatile m_notif_enabled;
@@ -260,7 +261,8 @@ void test_run(void)
     //(void) NRF_LOG_GETCHAR();
 	(void) button_read();
 	
-    counter_start();
+    //counter_start();
+	m_counter_started = false;
     nrf_ble_amts_notif_spam(&m_amts);
 }
 
@@ -273,8 +275,6 @@ void terminate_test(void)
     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
         NRF_LOG_INFO("Disconnecting.\r\n");
-		display_print_line_inc("Disconnecting");
-		m_display_show = true;
 		
         ret_code_t ret = sd_ble_gap_disconnect(m_conn_handle,
             BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
@@ -354,8 +354,9 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 
         case SERVICE_EVT_TRANSFER_1KB:
         {
-			//NRF_LOG_INFO("Sent %u KBytes\r\n", (evt.bytes_transfered_cnt / 1000));
-			m_transfer_data.kB_transfered = evt.bytes_transfered_cnt / 1024;
+			//NRF_LOG_INFO("Sent %u KBytes\r\n", (evt.bytes_transfered_cnt / 1024));
+			m_transfer_data.counter_ticks = counter_get();
+			m_transfer_data.bytes_transfered = evt.bytes_transfered_cnt;
 			m_display_show_transfer_data = true;
             bsp_board_led_invert(LED_PROGRESS);
         } break;
@@ -366,32 +367,36 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 			display_clear();
 			
             bsp_board_led_off(LED_PROGRESS);
-            bsp_board_led_on(LED_FINISHED);
+            //bsp_board_led_on(LED_FINISHED);
 
 			display_draw_nordic_logo();
 			display_print_line_inc("Transfer done.");
 			
 			char str[50];
+			uint16_t number_x_pos = 130;
 			
 			uint32_t counter_ticks = counter_get();
-			sprintf(str, "Time: %d.%d seconds elapsed.", (counter_ticks / 100), (counter_ticks % 100));
-			display_print_line_inc(str);
+			sprintf(str, "%.2f seconds.", (float)counter_ticks / 32768);
+			display_print_line(str, number_x_pos, display_get_line_nr());
+			display_print_line_inc("Time:");
 			
-            NRF_LOG_INFO("Transfered 1MB bytes (sent %u bytes).\r\n", evt.bytes_transfered_cnt);
-            sprintf(str, "Transfered 1MB (sent %u bytes).", evt.bytes_transfered_cnt);
-			display_print_line_inc(str);
+            NRF_LOG_INFO("Transfered: %u KB (%u bytes).\r\n", evt.bytes_transfered_cnt/1024, evt.bytes_transfered_cnt);
+            sprintf(str, "%u KB (%u bytes)).", evt.bytes_transfered_cnt/1024, evt.bytes_transfered_cnt);
+			display_print_line(str, number_x_pos, display_get_line_nr());
+			display_print_line_inc("Transfered:");
 			
             float timems = (float)(counter_get());
-            uint32_t sent_octet_cnt = evt.bytes_transfered_cnt * 8;
-            float throughput = (float)(sent_octet_cnt * 100) / timems;
+            float sent_octet_cnt = evt.bytes_transfered_cnt * 8;
+            float throughput = (float)(sent_octet_cnt * 32768) / timems;
             throughput = throughput / (float)1000;
             NRF_LOG_RAW_INFO("\r\n");
             NRF_LOG_INFO("Time: %u.%.2u seconds elapsed.\r\n",
-                         (counter_get() / 100), (counter_get() % 100));
+                         (counter_get() / 32768), (counter_get() * 1000 / 32768));
 			
             NRF_LOG_INFO("== Throughput: " NRF_LOG_FLOAT_MARKER " Kbits/s.\r\n", NRF_LOG_FLOAT(throughput));
-			sprintf(str, "Throughput: %f Kbits/s.", throughput);
-			display_print_line_inc(str);
+			sprintf(str, "%.2f Kbits/s.", throughput);
+			display_print_line(str, number_x_pos, display_get_line_nr());
+			display_print_line_inc("Throughput:");
 			
 			m_display_show = true;
 			m_transfer_done = true;
@@ -464,7 +469,7 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
 
             NRF_LOG_DEBUG("AMT Notification bytes cnt %u\r\n", p_evt->params.hvx.bytes_sent);
 
-            if (p_evt->params.hvx.bytes_rcvd >= AMT_BYTE_TRANSFER_CNT)
+            if (p_evt->params.hvx.bytes_rcvd >= amt_byte_transfer_count)
             {
                 bsp_board_led_off(LED_PROGRESS);
 
@@ -653,11 +658,8 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
         .rx_phys = m_test_params.rxtx_phy,
     };
 
-	if (m_board_role == BOARD_TESTER)
-    {
-		err_code = sd_ble_gap_phy_request(p_gap_evt->conn_handle, &phys);
-		APP_ERROR_CHECK(err_code);
-	}
+	err_code = sd_ble_gap_phy_request(p_gap_evt->conn_handle, &phys);
+	APP_ERROR_CHECK(err_code);
 	
     bsp_board_leds_off();
 }
@@ -671,8 +673,6 @@ void on_ble_gap_evt_disconnected(ble_gap_evt_t const * p_gap_evt)
     m_conn_handle = BLE_CONN_HANDLE_INVALID;
 
     NRF_LOG_INFO("Disconnected (reason 0x%x).\r\n", p_gap_evt->params.disconnected.reason);
-	display_print_line_inc("Disconnected");
-	m_display_show = true;
 
     if (m_run_test)
     {
@@ -784,6 +784,15 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 			NRF_LOG_INFO("RX PHY: %d\r\n", phy_update.rx_phy);
             m_phy_updated = true;
         } break;
+		
+		case BLE_EVT_TX_COMPLETE:
+			if(!m_counter_started)
+			{
+				NRF_LOG_INFO("Counter started\r\n");
+				counter_start();
+				m_counter_started = true;
+			}
+			break;
 		
         default:
             // No implementation needed.
@@ -1127,7 +1136,7 @@ void preferred_phy_select(void)
     NRF_LOG_INFO("Select preferred PHY:\r\n");
     NRF_LOG_INFO(" 1) 1 MBit.\r\n");
     NRF_LOG_INFO(" 2) 2 MBits.\r\n");
-    NRF_LOG_INFO(" 3) Coded.\r\n");
+    NRF_LOG_INFO(" 3) 125 KBits (long range).\r\n");
     NRF_LOG_FLUSH();
 
 	display_clear();
@@ -1136,7 +1145,7 @@ void preferred_phy_select(void)
 	display_print_line_inc("Select preferred PHY:");
 	display_print_line_inc(" 1) 1 MBit.");
 	display_print_line_inc(" 2) 2 MBit.");
-	display_print_line_inc(" 3) Coded.");
+	display_print_line_inc(" 3) 125 KBits (long range).");
 	display_show();
 	
     switch (button_read())
@@ -1259,9 +1268,48 @@ void data_len_ext_select(void)
                  (uint32_t) "OFF");
     NRF_LOG_FLUSH();
 
-    m_test_params.data_len_ext_enabled = (answer == YES) ? 1 : 0;
+    m_test_params.data_len_ext_enabled = (answer == BUTTON_1) ? 1 : 0;
 
     data_len_ext_set(m_test_params.data_len_ext_enabled);
+}
+
+void transfer_data_length_select(void)
+{
+	NRF_LOG_INFO("Select transfer data size \r\n");
+    NRF_LOG_INFO(" 1) 100KB\r\n");
+    NRF_LOG_INFO(" 2) 500KB\r\n");
+    NRF_LOG_INFO(" 3) 1MB\r\n");
+    NRF_LOG_FLUSH();
+	
+	display_clear();
+	display_test_params_print();
+	
+	display_print_line_inc("Select transfer data size:");
+	display_print_line_inc(" 1) 100KB");
+	display_print_line_inc(" 2) 500KB");
+	display_print_line_inc(" 3) 1MB");
+	display_show();
+
+	switch (button_read())
+    {
+        case BUTTON_1:
+        default:
+            amt_byte_transfer_count = 100*1024;
+            break;
+
+        case BUTTON_2:
+            amt_byte_transfer_count = 500*1024;
+            break;
+
+        case BUTTON_3:
+            amt_byte_transfer_count = 1024*1024;
+            break;
+    }
+
+	m_transfer_data.kb_transfer_size = amt_byte_transfer_count/1024;
+    NRF_LOG_INFO("Transfer data size set to %d KB\r\n", m_transfer_data.kb_transfer_size);
+    
+    NRF_LOG_FLUSH();
 }
 
 bool test_param_adjust_page_1(void)
@@ -1282,7 +1330,7 @@ bool test_param_adjust_page_1(void)
 		
 		display_test_params_print();
 		
-		display_print_line_inc("Adjust test parameters");
+		//display_print_line_inc("Adjust test parameters");
         display_print_line_inc(" 1) Select ATT MTU size");
         display_print_line_inc(" 2) Select connection interval");
         display_print_line_inc(" 3) Next page.");
@@ -1331,8 +1379,8 @@ bool test_param_adjust_page_2(void)
 		
 		display_test_params_print();
 		
-		display_print_line_inc("Adjust test parameters");
-        display_print_line_inc(" 1) Turn on/off Data length extension (DLE)");
+		//display_print_line_inc("Adjust test parameters");
+        display_print_line_inc(" 1) Turn on/off Data length ext. (DLE)");
         display_print_line_inc(" 2) Select preferred PHY.");
 		display_print_line_inc(" 3) Next page.");
         display_print_line_inc(" 4) Back.");
@@ -1362,6 +1410,50 @@ bool test_param_adjust_page_2(void)
 	return back;
 }
 
+bool test_param_adjust_page_3(void)
+{
+    bool done = false;
+	bool back = false;
+
+    while (!done)
+    {
+        NRF_LOG_INFO("Adjust test parameters.\r\n");
+        NRF_LOG_INFO(" 1) Select transfer data size.\r\n");
+		NRF_LOG_INFO(" 3) Next page.\r\n");
+		NRF_LOG_INFO(" 4) Back.\r\n")
+        NRF_LOG_FLUSH();
+		
+		display_clear();
+		
+		display_test_params_print();
+		
+		//display_print_line_inc("Adjust test parameters");
+        display_print_line_inc(" 1) Select transfer data size.");
+		display_print_line_inc(" 3) Next page.");
+        display_print_line_inc(" 4) Back.");
+        display_show();
+
+        switch (button_read())
+        {
+            case BUTTON_1:
+                transfer_data_length_select();
+                break;
+
+            case BUTTON_3:
+                done = true;
+                break;
+
+            case BUTTON_4:
+                back = true;
+                done = true;
+            default:
+				
+                break;
+        }
+    }
+	return back;
+}
+
 void test_param_adjust(void)
 {
 	bool back = false;
@@ -1374,9 +1466,14 @@ void test_param_adjust(void)
 			back = test_param_adjust_page_1();
 			page++;
 		}
-		else
+		else if(page == 1)
 		{
 			back = test_param_adjust_page_2();
+			page++;
+		}
+		else
+		{
+			back = test_param_adjust_page_3();
 			page = 0;
 		}
 	}
@@ -1405,20 +1502,31 @@ void test_params_print(void)
 void display_test_params_print()
 {
 	char str[50];
+	uint16_t number_pos = 220;
 	
-	sprintf(str, "ATT MTU size: %d bytes", m_test_params.att_mtu);
-	display_print_line_inc(str);
+	sprintf(str, "%d bytes", m_test_params.att_mtu);
+	display_print_line(str, number_pos, display_get_line_nr());
+	display_print_line_inc("ATT MTU size:");
 	
-	sprintf(str, "Preferredy PHY: %s\r\n", phy_str(m_test_params.rxtx_phy));
-	display_print_line_inc(str);
 	
-    sprintf(str, "Conn. interval: %.2f ms", (float)m_test_params.conn_interval * 1.25);
-	display_print_line_inc(str);
+	sprintf(str, "%s\r\n", phy_str(m_test_params.rxtx_phy));
+	display_print_line(str, number_pos, display_get_line_nr());
+	display_print_line_inc("Preferredy PHY:");
+	
+    sprintf(str, "%.2f ms", (float)m_test_params.conn_interval * 1.25);
+	display_print_line(str, number_pos, display_get_line_nr());
+	display_print_line_inc("Conn. interval:");
     
-	sprintf(str, "Data length extension (DLE): %s", m_test_params.data_len_ext_enabled ?
+	sprintf(str, "%s", m_test_params.data_len_ext_enabled ?
                  (uint32_t)"ON" :
                  (uint32_t)"OFF");
-	display_print_line_inc(str);
+	display_print_line(str, number_pos, display_get_line_nr());
+	display_print_line_inc("Data length ext. (DLE):");
+	
+	sprintf(str, "%d KB", m_transfer_data.kb_transfer_size);
+	display_print_line(str, number_pos, display_get_line_nr());
+	display_print_line_inc("Transfer data size:");
+	
 	/*
     sprintf(str, "Conn. event length ext.: %s", m_test_params.conn_evt_len_ext_enabled ?
                  (uint32_t)"ON" :
@@ -1509,6 +1617,26 @@ static bool is_test_ready()
     return false;
 }
 
+static void dummy_preferred_phy_select()
+{
+	button_read();
+	
+	if(m_button == BUTTON_1)
+	{
+		m_test_params.rxtx_phy = BLE_GAP_PHY_2MBPS;
+		preferred_phy_set(m_test_params.rxtx_phy);
+		NRF_LOG_INFO("Preferred PHY set to 2Mbps\n\r");
+		bsp_board_led_off(BSP_BOARD_LED_3);
+	}
+	else if(m_button == BUTTON_2)
+	{
+		m_test_params.rxtx_phy = BLE_GAP_PHY_CODED;
+		preferred_phy_set(m_test_params.rxtx_phy);
+		NRF_LOG_INFO("Preferred PHY set to coded\n\r");
+		bsp_board_led_on(BSP_BOARD_LED_3);
+	}
+	
+}
 
 int main(void)
 {
@@ -1537,12 +1665,14 @@ int main(void)
 
     ble_stack_init();
 
+	
     gap_params_init();
     conn_params_init();
     gatt_init();
     advertising_data_set();
-	
 
+	sd_ble_gap_tx_power_set(4);
+	
     server_init();
     client_init();
 
@@ -1550,17 +1680,16 @@ int main(void)
     data_len_ext_set(m_test_params.data_len_ext_enabled);
     conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
     preferred_phy_set(m_test_params.rxtx_phy);
-
+	
     NRF_LOG_INFO("ATT MTU example started.\r\n");
     NRF_LOG_INFO("Press button 1 on the board connected to the PC.\r\n");
     NRF_LOG_INFO("Press button 2 on other board.\r\n");
     NRF_LOG_FLUSH();
 	
 	display_clear();
-	display_print_line_inc("ATT MTU example started.\r\n");
-    display_print_line_inc("Press button 1 on the board");
-	display_print_line_inc("connected to the PC.");
-    display_print_line_inc("Press button 2 on other board.");
+	//display_print_line_inc("ATT MTU example started.\r\n");
+    display_print_line_inc("- Press button 1 on this board");
+    display_print_line_inc("- Press button 2 on other board.");
 	display_show();
 
     uint8_t button = button_read();
@@ -1588,7 +1717,10 @@ int main(void)
     NRF_LOG_INFO("Entering main loop.\r\n");
     for (;;)
     {
-		
+		if (m_board_role == BOARD_DUMMY)
+		{
+			dummy_preferred_phy_select();
+		}
 		if(m_transfer_done)
 		{
 			display_print_line_inc("");
@@ -1608,7 +1740,7 @@ int main(void)
         {
 			//clear data from the last transfer
 			m_display_show_transfer_data = false;
-			m_transfer_data.kB_transfered = 0;
+			m_transfer_data.bytes_transfered = 0;
 			
             m_run_test = true;
             test_run();

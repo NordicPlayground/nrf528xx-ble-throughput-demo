@@ -27,7 +27,9 @@ extern "C" {
 #define AMT_RCV_BYTES_CNT_CHAR_UUID  0x1525
 
 #define AMT_RCV_BYTES_CNT_MAX_LEN    (4)
-#define AMT_BYTE_TRANSFER_CNT (1024*1024)
+#define AMT_BYTE_TRANSFER_CNT_DEFAULT (1024*1024)
+
+extern uint32_t amt_byte_transfer_count;
 
 /**
  * @defgroup nrf_ble_amt ATT MTU Throughput (AMT) Service Client

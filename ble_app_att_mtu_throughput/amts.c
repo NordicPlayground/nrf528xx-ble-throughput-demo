@@ -22,6 +22,7 @@
 #define OPCODE_LENGTH 1     /**< Length of opcode inside a notification. */
 #define HANDLE_LENGTH 2     /**< Length of handle inside a notification. */
 
+uint32_t amt_byte_transfer_count;
 
 static void char_notification_send(nrf_ble_amts_t * p_ctx);
 
@@ -124,6 +125,8 @@ void nrf_ble_amts_init(nrf_ble_amts_t * p_ctx, amts_evt_handler_t evt_handler)
     ble_uuid_t    ble_uuid;
     ble_uuid128_t base_uuid = {SERVICE_UUID_BASE};
 
+	amt_byte_transfer_count = AMT_BYTE_TRANSFER_CNT_DEFAULT;
+	
     err_code = sd_ble_uuid_vs_add(&base_uuid, &(p_ctx->uuid_type));
     APP_ERROR_CHECK(err_code);
 
@@ -185,7 +188,7 @@ static void char_notification_send(nrf_ble_amts_t * p_ctx)
     uint16_t           len = p_ctx->max_payload_len;
     nrf_ble_amts_evt_t evt;
 
-    if (p_ctx->bytes_sent >= AMT_BYTE_TRANSFER_CNT)
+    if (p_ctx->bytes_sent >= amt_byte_transfer_count)
     {
         evt.bytes_transfered_cnt = p_ctx->bytes_sent;
         p_ctx->busy              = false;
