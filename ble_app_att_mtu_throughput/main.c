@@ -365,7 +365,6 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
         case SERVICE_EVT_TRANSFER_FINISHED:
         {
 			counter_stop();
-			display_clear();
 			
             bsp_board_led_off(LED_PROGRESS);
             //bsp_board_led_on(LED_FINISHED);

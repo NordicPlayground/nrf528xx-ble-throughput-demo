@@ -331,8 +331,9 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	
 	display_clear();
 	
+	display_print_line_inc("");
 	display_print_line_center_inc("Transferring data:");
-	
+	display_print_line_inc("");
 	
 	//print filled bar
 	fb_rectangle((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
@@ -362,6 +363,8 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 
 void display_test_done_screen(transfer_data_t *transfer_data)
 {
+	display_clear();
+	
 	char str[50];
 	uint16_t number_x_pos = 130;
 
