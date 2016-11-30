@@ -258,10 +258,8 @@ void test_run(void)
 	display_print_line_inc("Test is ready. Press any button to run.");
 	display_show();
 
-    //(void) NRF_LOG_GETCHAR();
 	(void) button_read();
 	
-    //counter_start();
 	m_counter_started = false;
     nrf_ble_amts_notif_spam(&m_amts);
 }
@@ -630,8 +628,6 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
     (void) sd_ble_gap_adv_stop();
 
     NRF_LOG_INFO("Discovering GATT database...\r\n");
-	display_print_line_inc("Discovering GATT database...");
-	m_display_show = true;
 
     // Zero the database before starting discovery.
     memset(&m_ble_db_discovery, 0x00, sizeof(m_ble_db_discovery));
@@ -640,15 +636,19 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
     err_code  = ble_db_discovery_start(&m_ble_db_discovery, p_gap_evt->conn_handle);
     APP_ERROR_CHECK(err_code);
 
-	// Request PHY.
-    ble_gap_phys_t phys =
-    {
-        .tx_phys = m_test_params.rxtx_phy,
-        .rx_phys = m_test_params.rxtx_phy,
-    };
+	
+	if(m_board_role == BOARD_TESTER)
+	{
+		// Request PHY.
+		ble_gap_phys_t phys =
+		{
+			.tx_phys = m_test_params.rxtx_phy,
+			.rx_phys = m_test_params.rxtx_phy,
+		};
 
-	err_code = sd_ble_gap_phy_request(p_gap_evt->conn_handle, &phys);
-	APP_ERROR_CHECK(err_code);
+		err_code = sd_ble_gap_phy_request(p_gap_evt->conn_handle, &phys);
+		APP_ERROR_CHECK(err_code);
+	}
 	
 	
     bsp_board_led_off(LED_SCANNING_ADVERTISING);
@@ -693,8 +693,6 @@ void on_ble_gap_evt_adv_report(ble_gap_evt_t const * p_gap_evt)
     NRF_LOG_INFO("Device \"%s\" with matching name found, sending a connection request.\r\n",
                  (uint32_t) m_target_periph_name);
 	
-	char str[100];
-	sprintf(str, "Device \"%s\" with matching name found, ", m_target_periph_name);
 	display_print_line_inc("Device with matching name found");
 	m_display_show = true;
 
@@ -773,29 +771,26 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 			ble_gap_evt_phy_update_t phy_update;
 			phy_update = p_gap_evt->params.phy_update;
             
-			//only print out once
-			if(!m_phy_updated)
+			switch(phy_update.tx_phy)
 			{
-				switch(phy_update.tx_phy)
-				{
-					case BLE_GAP_PHY_2MBPS:
-						NRF_LOG_INFO("PHY updated to 2Mbps\r\n");
-						display_print_line_inc("PHY updated to 2Mbps");
-						break;
-					case BLE_GAP_PHY_1MBPS:
-						NRF_LOG_INFO("PHY updated to 1Mbps\r\n");
-						display_print_line_inc("PHY updated to 1Mbps");
-						break;
-					case BLE_GAP_PHY_CODED:
-						NRF_LOG_INFO("PHY updated to 125Kbps\r\n");
-						display_print_line_inc("PHY updated to 125Kbps");
-						break;
-					default:
-						NRF_LOG_INFO("PHY updated to unknown\r\n");
-						display_print_line_inc("PHY updated to unknown");
-						break;
-				}
+				case BLE_GAP_PHY_2MBPS:
+					NRF_LOG_INFO("PHY updated to 2Mbps\r\n");
+					display_print_line_inc("PHY updated to 2Mbps");
+					break;
+				case BLE_GAP_PHY_1MBPS:
+					NRF_LOG_INFO("PHY updated to 1Mbps\r\n");
+					display_print_line_inc("PHY updated to 1Mbps");
+					break;
+				case BLE_GAP_PHY_CODED:
+					NRF_LOG_INFO("PHY updated to 125Kbps\r\n");
+					display_print_line_inc("PHY updated to 125Kbps");
+					break;
+				default:
+					NRF_LOG_INFO("PHY updated to unknown\r\n");
+					display_print_line_inc("PHY updated to unknown");
+					break;
 			}
+			
 			m_display_show = true;
             m_phy_updated = true;
         } break;
@@ -1345,7 +1340,6 @@ bool test_param_adjust_page_1(void)
 		
 		display_test_params_print();
 		
-		//display_print_line_inc("Adjust test parameters");
         display_print_line_inc(" 1) Select ATT MTU size");
         display_print_line_inc(" 2) Select connection interval");
         display_print_line_inc(" 3) Next page.");
@@ -1541,13 +1535,6 @@ void display_test_params_print()
 	sprintf(str, "%d KB", m_transfer_data.kb_transfer_size);
 	display_print_line(str, number_pos, display_get_line_nr());
 	display_print_line_inc("Transfer data size:");
-	
-	/*
-    sprintf(str, "Conn. event length ext.: %s", m_test_params.conn_evt_len_ext_enabled ?
-                 (uint32_t)"ON" :
-                 (uint32_t)"OFF");
-	display_print_line_inc(str);
-	*/
 }
 
 
@@ -1557,8 +1544,6 @@ void test_begin(void)
     NRF_LOG_FLUSH();
 	
 	display_clear();
-	//display_print_line_inc("Preparing the test.\r\n");
-	display_show();
 
     switch (m_gap_role)
     {
@@ -1632,25 +1617,19 @@ static bool is_test_ready()
     return false;
 }
 
-static void dummy_preferred_phy_select()
+//for testing the throughput by measuring the distance between each packet using logic analyzer or oscilloscope
+void radio_ppi_gpiote_init()
 {
-	button_read();
+	NRF_GPIOTE->CONFIG[7] =   (GPIOTE_CONFIG_MODE_Task << GPIOTE_CONFIG_MODE_Pos)
+							| (GPIOTE_CONFIG_OUTINIT_High << GPIOTE_CONFIG_OUTINIT_Pos)
+							| (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos)
+							| (0 << GPIOTE_CONFIG_PORT_Pos)
+							| (16 << GPIOTE_CONFIG_PSEL_Pos);
 	
-	if(m_button == BUTTON_1)
-	{
-		m_test_params.rxtx_phy = BLE_GAP_PHY_2MBPS;
-		preferred_phy_set(m_test_params.rxtx_phy);
-		NRF_LOG_INFO("Preferred PHY set to 2Mbps\n\r");
-		bsp_board_led_off(BSP_BOARD_LED_3);
-	}
-	else if(m_button == BUTTON_2)
-	{
-		m_test_params.rxtx_phy = BLE_GAP_PHY_CODED;
-		preferred_phy_set(m_test_params.rxtx_phy);
-		NRF_LOG_INFO("Preferred PHY set to coded\n\r");
-		bsp_board_led_on(BSP_BOARD_LED_3);
-	}
+	NRF_PPI->CH[15].EEP = (uint32_t)&NRF_RADIO->EVENTS_END;
+	NRF_PPI->CH[15].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[7];
 	
+	NRF_PPI->CHENSET = (PPI_CHENSET_CH15_Enabled << PPI_CHENSET_CH15_Pos);
 }
 
 int main(void)
@@ -1658,7 +1637,7 @@ int main(void)
     log_init();
 	
 	bool display_connected = false;
-	//comment out display_init if no display is attached
+	
 	display_connected = display_init();
 	
     leds_init();
@@ -1694,7 +1673,6 @@ int main(void)
     gatt_mtu_set(m_test_params.att_mtu);
     data_len_ext_set(m_test_params.data_len_ext_enabled);
     conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
-    preferred_phy_set(m_test_params.rxtx_phy);
 	
     NRF_LOG_INFO("ATT MTU example started.\r\n");
     NRF_LOG_INFO("Press button 1 on the board connected to the PC.\r\n");
@@ -1712,10 +1690,12 @@ int main(void)
 	if(button == BUTTON_1)
 	{
 		m_board_role = BOARD_TESTER;
+		preferred_phy_set(m_test_params.rxtx_phy);
 	}
 	else
 	{
 		m_board_role = BOARD_DUMMY;
+		preferred_phy_set(BLE_GAP_PHY_2MBPS | BLE_GAP_PHY_1MBPS | BLE_GAP_PHY_CODED);
 	}
 
     if (m_board_role == BOARD_TESTER)
@@ -1732,10 +1712,6 @@ int main(void)
     NRF_LOG_INFO("Entering main loop.\r\n");
     for (;;)
     {
-		if (m_board_role == BOARD_DUMMY)
-		{
-			dummy_preferred_phy_select();
-		}
 		if(m_transfer_done)
 		{
 			display_test_done_screen(&m_transfer_data);
@@ -1773,7 +1749,6 @@ int main(void)
         {
             wait_for_event();
         }
-
     }
 }
 

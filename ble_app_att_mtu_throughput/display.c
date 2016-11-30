@@ -333,22 +333,21 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	
 	display_print_line_inc("");
 	display_print_line_center_inc("Transferring data:");
-	display_print_line_inc("");
 	
 	//print filled bar
 	fb_rectangle((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
-				line_counter*TEXT_HEIGHT + TEXT_START_YPOS, 
+				line_counter*TEXT_HEIGHT + TEXT_HEIGHT/2 + TEXT_START_YPOS, 
 				(FB_UTIL_LCD_WIDTH + TRANSFER_BAR_LENGTH)/2, 
-				line_counter*(TRANSFER_BAR_HEIGHT_IN_LINES+1)*TEXT_HEIGHT-1 + TEXT_START_YPOS, 
+				(line_counter + TRANSFER_BAR_HEIGHT_IN_LINES)*TEXT_HEIGHT + TEXT_START_YPOS + TEXT_HEIGHT/2, 
 				FB_COLOR_BLACK);
 	
 	fb_bar((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
-			line_counter*TEXT_HEIGHT + TEXT_START_YPOS,
+			line_counter*TEXT_HEIGHT + TEXT_HEIGHT/2 + TEXT_START_YPOS,
 			(FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2 + (uint32_t)(transfer_data->bytes_transfered/1024)*TRANSFER_BAR_LENGTH / transfer_data->kb_transfer_size, 
-			line_counter*(TRANSFER_BAR_HEIGHT_IN_LINES+1)*TEXT_HEIGHT-1 + TEXT_START_YPOS, 
+			(line_counter + TRANSFER_BAR_HEIGHT_IN_LINES)*TEXT_HEIGHT + TEXT_START_YPOS + TEXT_HEIGHT/2, 
 			FB_COLOR_BLACK);
-	line_counter += TRANSFER_BAR_HEIGHT_IN_LINES;
 	
+	line_counter += TRANSFER_BAR_HEIGHT_IN_LINES + 1;
 	
 	char str[50];
 	sprintf(str, "%dKB/%dKB transferred", transfer_data->bytes_transfered/1024, transfer_data->kb_transfer_size);
