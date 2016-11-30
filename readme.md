@@ -6,12 +6,13 @@ This example implements demonstrates the ble bandwidth with different settings i
 
 Requirements
 ------------
-- nRF5 SDK version  found here: http://projecttools.nordicsemi.no/bamboo/browse/HUSS-SN-CR-521/artifact
+- nRF5 SDK version 13
 - nRF52DK (PCA10040) or nRF52840 DK (PCA10056)
+- Display - PCA63520. Not required to run the demo, but the demo works best with this.
  
 The project may need modifications to work with later versions or other boards. 
 
-To compile it, clone the repository in any subdirectory under /nRF5_SDK_12.1.0/examples/
+To compile it, clone the repository in any subdirectory under /nRF5_SDK_13/examples/
 
 About this project
 ------------------
