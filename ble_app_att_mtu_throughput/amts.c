@@ -208,6 +208,17 @@ static void char_notification_send(nrf_ble_amts_t * p_ctx)
         .p_len  = &len,
     };
 
+	p_ctx->bytes_sent += len;
+
+	if (p_ctx->kbytes_sent != (p_ctx->bytes_sent / 1024))
+	{
+		p_ctx->kbytes_sent = (p_ctx->bytes_sent / 1024);
+
+		evt.evt_type             = SERVICE_EVT_TRANSFER_1KB;
+		evt.bytes_transfered_cnt = p_ctx->bytes_sent;
+		p_ctx->evt_handler(evt);
+	}
+	
     uint32_t err_code = NRF_SUCCESS;
     while (err_code == NRF_SUCCESS)
     {
@@ -224,17 +235,6 @@ static void char_notification_send(nrf_ble_amts_t * p_ctx)
         else if (err_code != NRF_SUCCESS)
         {
             NRF_LOG_ERROR("sd_ble_gatts_hvx() failed: 0x%x\r\n", err_code);
-        }
-
-        p_ctx->bytes_sent += len;
-
-        if (p_ctx->kbytes_sent != (p_ctx->bytes_sent / 1024))
-        {
-            p_ctx->kbytes_sent = (p_ctx->bytes_sent / 1024);
-
-            evt.evt_type             = SERVICE_EVT_TRANSFER_1KB;
-            evt.bytes_transfered_cnt = p_ctx->bytes_sent;
-            p_ctx->evt_handler(evt);
         }
     }
 }
