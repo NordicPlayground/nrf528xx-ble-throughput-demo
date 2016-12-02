@@ -14151,6 +14151,7 @@ const font_info_t font_name = FONTS_ARIAL_20PT_INFO
 
 extern const font_info_t font_calibri_14pt_info;
 extern const font_info_t font_calibri_18pt_info;
+extern const font_info_t font_calibri_12pt_info;
 
 #endif // FONTS_H__
 

@@ -23,7 +23,7 @@
 #include "fb_util.h"
 
 #define TEXT_LEFT_MARGIN 				2
-#define TEXT_HEIGHT 					20
+#define TEXT_HEIGHT 					19
 #define TRANSFER_BAR_LENGTH 			300
 #define TRANSFER_BAR_HEIGHT_IN_LINES 	2
 #define TEXT_START_YPOS 				44
@@ -207,7 +207,7 @@ bool display_init()
     drv_vlcd_clear(DRV_VLCD_COLOR_WHITE);
 	//drv_vlcd_callback_set(drv_vlcd_sig_callback);
 	
-	fb_font_set(&font_calibri_14pt_info);
+	fb_font_set(&font_calibri_12pt_info);
 	
 	m_display_connected = true;
 	return true;
@@ -226,7 +226,7 @@ void display_draw_title()
 {
 	fb_font_set(&font_calibri_18pt_info);
 	fb_string_put(TEXT_LEFT_MARGIN + 5, 10, TITLE, FB_COLOR_BLACK);
-	fb_font_set(&font_calibri_14pt_info);
+	fb_font_set(&font_calibri_12pt_info);
 }
 
 void display_show()
@@ -277,7 +277,7 @@ void display_print_line_inc(char * line)
 	{
 		return;
 	}
-	if(line_counter < 9)
+	if(line_counter < 10)
 	{
 		line_counter++;
 		fb_string_put(TEXT_LEFT_MARGIN, (line_counter - 1) * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);

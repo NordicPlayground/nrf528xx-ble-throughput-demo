@@ -1116,6 +1116,8 @@ void conn_evt_len_ext_set(bool status)
 
     err_code = sd_ble_opt_set(BLE_COMMON_OPT_CONN_EVT_EXT, &opt);
     APP_ERROR_CHECK(err_code);
+	
+	NRF_LOG_INFO("Setting connection event extension to %d\r\n", opt.common_opt.conn_evt_ext.enable);
 }
 
 
@@ -1136,7 +1138,7 @@ void data_len_ext_set(bool status)
     opt.gap_opt.ext_len.rxtx_max_pdu_payload_size = pdu_size;
 
     err_code = sd_ble_opt_set(BLE_GAP_OPT_EXT_LEN, &opt);
-    NRF_LOG_DEBUG("Setting DLE to %u: 0x%x\r\n", status, err_code);
+    NRF_LOG_DEBUG("Setting DLE to %u\r\n", pdu_size);
     APP_ERROR_CHECK(err_code);
 }
 
@@ -1283,6 +1285,29 @@ void data_len_ext_select(void)
     data_len_ext_set(m_test_params.data_len_ext_enabled);
 }
 
+void conn_evt_ext_select(void)
+{
+    NRF_LOG_INFO("Turn on Connection Event Extension?r\n");
+    NRF_LOG_FLUSH();
+
+    display_clear();
+	display_test_params_print();
+	
+	display_print_line_inc("Turn on Connection Event Extension?");
+	display_print_line_inc(" 1) Yes");
+	display_print_line_inc(" 2) No");
+	display_show();
+
+    uint8_t answer = button_read();
+    NRF_LOG_INFO("Connection Event Extension is %s\r\n", (answer == BUTTON_1) ?
+                 (uint32_t) "ON" :
+                 (uint32_t) "OFF");
+    NRF_LOG_FLUSH();
+
+    m_test_params.conn_evt_len_ext_enabled = (answer == BUTTON_1) ? 1 : 0;
+	conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
+}
+
 void transfer_data_length_select(void)
 {
 	NRF_LOG_INFO("Select transfer data size \r\n");
@@ -1427,7 +1452,8 @@ bool test_param_adjust_page_3(void)
     while (!done)
     {
         NRF_LOG_INFO("Adjust test parameters.\r\n");
-        NRF_LOG_INFO(" 1) Select transfer data size.\r\n");
+		NRF_LOG_INFO(" 1) Turn on/off Connection Event ext.\r\n");
+        NRF_LOG_INFO(" 2) Select transfer data size.\r\n");
 		NRF_LOG_INFO(" 3) Next page.\r\n");
 		NRF_LOG_INFO(" 4) Back.\r\n")
         NRF_LOG_FLUSH();
@@ -1436,8 +1462,8 @@ bool test_param_adjust_page_3(void)
 		
 		display_test_params_print();
 		
-		//display_print_line_inc("Adjust test parameters");
-        display_print_line_inc(" 1) Select transfer data size.");
+		display_print_line_inc(" 1) Turn on/off Connection Event ext.");
+        display_print_line_inc(" 2) Select transfer data size.");
 		display_print_line_inc(" 3) Next page.");
         display_print_line_inc(" 4) Back.");
         display_show();
@@ -1445,8 +1471,12 @@ bool test_param_adjust_page_3(void)
         switch (button_read())
         {
             case BUTTON_1:
-                transfer_data_length_select();
+				conn_evt_ext_select();
                 break;
+			
+			case BUTTON_2:
+				transfer_data_length_select();
+				break;
 
             case BUTTON_3:
                 done = true;
@@ -1531,6 +1561,12 @@ void display_test_params_print()
                  (uint32_t)"OFF");
 	display_print_line(str, number_pos, display_get_line_nr());
 	display_print_line_inc("Data length ext. (DLE):");
+	
+	sprintf(str, "%s", m_test_params.conn_evt_len_ext_enabled ?
+                 (uint32_t)"ON" :
+                 (uint32_t)"OFF");
+	display_print_line(str, number_pos, display_get_line_nr());
+	display_print_line_inc("Connection Event ext:");
 	
 	sprintf(str, "%d KB", m_transfer_data.kb_transfer_size);
 	display_print_line(str, number_pos, display_get_line_nr());
@@ -1635,6 +1671,7 @@ void radio_ppi_gpiote_init()
 int main(void)
 {
     log_init();
+	//radio_ppi_gpiote_init();
 	
 	bool display_connected = false;
 	
