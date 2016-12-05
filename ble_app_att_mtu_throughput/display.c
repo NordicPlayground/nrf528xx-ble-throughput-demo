@@ -270,7 +270,6 @@ void display_clear()
 	fb_line(0, TEXT_START_YPOS - 2, FB_UTIL_LCD_WIDTH, TEXT_START_YPOS - 2, FB_COLOR_BLACK);
 }
 
-//TODO: print multiple lines i line exceeds width of display
 void display_print_line_inc(char * line)
 {
 	if(!m_display_connected)
@@ -284,7 +283,6 @@ void display_print_line_inc(char * line)
 	}
 }
 
-//TODO
 void display_print_line_center_inc(char * line)
 {
 	if(!m_display_connected)
@@ -356,6 +354,9 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	//display_print_line("kbit/s", 150, line_counter);
 	sprintf(str, "Speed: %.1f Kbits/s", throughput);
 	display_print_line_center_inc(str);
+	
+	display_print_line_inc("");
+	display_print_line_center_inc("Press any key to terminate the test");
 	
 	display_show();
 }

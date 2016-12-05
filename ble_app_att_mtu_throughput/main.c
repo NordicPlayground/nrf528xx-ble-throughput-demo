@@ -96,17 +96,6 @@ typedef enum
 //} test_params_t;
 
 static void button_event_handler(uint8_t pin_no, uint8_t button_action);
-
-#ifdef NRF52832
-//Display will occupy the buttons on nRF52 DK, move the button input pins
-static app_button_cfg_t buttons_display_pca10040[] =
-{
-	{5, false, BUTTON_PULL, button_event_handler},
-	{7,  false, BUTTON_PULL, button_event_handler},
-	{11,  false, BUTTON_PULL, button_event_handler},
-	{12,  false, BUTTON_PULL, button_event_handler}
-};
-#endif
 	
 static app_button_cfg_t buttons[] =
 {
@@ -140,6 +129,7 @@ static bool volatile m_notif_enabled;
 static bool volatile m_mtu_exchanged;
 static bool volatile m_phy_updated;
 static bool volatile m_conn_interval_configured;
+static bool volatile m_test_started = false;
 
 static board_role_t volatile m_board_role  = NOT_SELECTED;
 static uint16_t              m_conn_handle = BLE_CONN_HANDLE_INVALID; /**< Handle of the current BLE connection .*/
@@ -187,6 +177,8 @@ void scan_start(void);
 void test_params_print(void);
 void display_test_params_print(void);
 uint8_t button_read(void);
+void buttons_enable(void);
+void buttons_disable(void);
 static void wait_for_event(void);
 void menu_print(void);
 
@@ -262,6 +254,9 @@ void test_run(void)
 	
 	m_counter_started = false;
     nrf_ble_amts_notif_spam(&m_amts);
+	
+	m_test_started = true;
+	buttons_enable();
 }
 
 void terminate_test(void)
@@ -271,6 +266,10 @@ void terminate_test(void)
     m_mtu_exchanged            = false;
 	m_phy_updated              = false;
     m_conn_interval_configured = false;
+	m_test_started				= false;
+	
+	buttons_disable();
+	
     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
         NRF_LOG_INFO("Disconnecting.\r\n");
@@ -290,14 +289,7 @@ void terminate_test(void)
         }
         if (m_board_role == BOARD_DUMMY)
         {
-            if (m_gap_role == BLE_GAP_ROLE_PERIPH)
-            {
-                advertising_start();
-            }
-            else
-            {
-                scan_start();
-            }
+			advertising_start();
         }
     }
 }
@@ -702,7 +694,7 @@ void on_ble_gap_evt_adv_report(ble_gap_evt_t const * p_gap_evt)
     // Initiate connection.
     m_conn_param.min_conn_interval = CONN_INTERVAL_DEFAULT;
     m_conn_param.max_conn_interval = CONN_INTERVAL_DEFAULT;
-
+ 	
     ret_code_t err_code;
     err_code = sd_ble_gap_connect(&p_gap_evt->params.adv_report.peer_addr,
                                     &m_scan_param,
@@ -820,6 +812,8 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
  */
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
+	NRF_LOG_INFO("BLE Event: %d\r\n", p_ble_evt->header.evt_id);
+	
     on_ble_evt(p_ble_evt);
     ble_conn_params_on_ble_evt(p_ble_evt);
     ble_db_discovery_on_ble_evt(&m_ble_db_discovery, p_ble_evt);
@@ -927,6 +921,13 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
 {
 	if(button_action == APP_BUTTON_PUSH)
 	{
+		if(m_test_started)
+		{
+			nrf_ble_amts_evt_t amts_evt;
+			amts_evt.bytes_transfered_cnt = m_transfer_data.bytes_transfered;
+			amts_evt.evt_type = SERVICE_EVT_TRANSFER_FINISHED;
+			amts_evt_handler(amts_evt);
+		}
 		m_button = pin_no;
 	}
 }
@@ -1581,22 +1582,13 @@ void test_begin(void)
 	
 	display_clear();
 
-    switch (m_gap_role)
+    if (m_board_role == BOARD_TESTER)
     {
-        default:
-            // If no connection was established, the role won't be either.
-            // In this case, start both advertising and scanning.
-            advertising_start();
-            scan_start();
-            break;
-
-        case BLE_GAP_ROLE_PERIPH:
-            advertising_start();
-            break;
-
-        case BLE_GAP_ROLE_CENTRAL:
-            scan_start();
-            break;
+        scan_start();
+    }
+    if (m_board_role == BOARD_DUMMY)
+    {
+        advertising_start();
     }
 }
 
@@ -1613,23 +1605,29 @@ void menu_print(void)
 		
         NRF_LOG_INFO("Select an option:\r\n");
         NRF_LOG_INFO(" 1) Run test.\r\n");
-        NRF_LOG_INFO(" 2) Adjust test parameters.\r\n");
+		NRF_LOG_INFO(" 2) Run continuous test.\r\n");
+        NRF_LOG_INFO(" 3) Adjust test parameters.\r\n");
         NRF_LOG_FLUSH();
 
-		display_print_line_inc("Select an option:\r\n");
-        display_print_line_inc(" 1) Run test.\r\n");
-        display_print_line_inc(" 2) Adjust test parameters.\r\n");
+		display_print_line_inc("Select an option:");
+        display_print_line_inc(" 1) Run test.");
+		display_print_line_inc(" 2) Run continuous test.");
+        display_print_line_inc(" 3) Adjust test parameters.");
 		display_show();
 		
         switch (button_read())
         {
             case BUTTON_1:
-            default:
                 begin_test = true;
                 test_begin();
                 break;
 
-            case BUTTON_2:
+			case BUTTON_2:
+                begin_test = true;
+                test_begin();
+                break;
+			
+            case BUTTON_3:
                 test_param_adjust();
                 break;
         }
@@ -1673,29 +1671,24 @@ int main(void)
     log_init();
 	//radio_ppi_gpiote_init();
 	
-	bool display_connected = false;
-	
-	display_connected = display_init();
+	display_init();
 	
     leds_init();
     timer_init();
     counter_init();
-	if(display_connected)
-	{
-		#ifdef NRF52840_XXAA
-			buttons_init(buttons);
-		#endif
-		#ifdef NRF52832
-			buttons_init(buttons_display_pca10040);
-		#endif
-	}
-	else
-	{
-		buttons_init(buttons);
-	}
+	
+	buttons_init(buttons);
 
     ble_stack_init();
 
+	//The first nRF52840 does not have a unique address, therefore we must change it
+	uint32_t err_code;
+	ble_gap_addr_t address;
+	err_code = sd_ble_gap_addr_get(&address);
+	APP_ERROR_CHECK(err_code);
+	address.addr[3]++;
+	err_code = sd_ble_gap_addr_set(&address);
+	APP_ERROR_CHECK(err_code);
 	
     gap_params_init();
     conn_params_init();
@@ -1717,7 +1710,6 @@ int main(void)
     NRF_LOG_FLUSH();
 	
 	display_clear();
-	//display_print_line_inc("ATT MTU example started.\r\n");
     display_print_line_inc("- Press button 1 on this board");
     display_print_line_inc("- Press button 2 on other board.");
 	display_show();
@@ -1742,7 +1734,6 @@ int main(void)
     if (m_board_role == BOARD_DUMMY)
     {
         advertising_start();
-        scan_start();
     }
 
     // Enter main loop.
@@ -1764,8 +1755,6 @@ int main(void)
 
         if (is_test_ready())
         {
-			m_transfer_data.bytes_transfered = 0;
-			
             m_run_test = true;
             test_run();
         }
