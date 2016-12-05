@@ -130,6 +130,7 @@ static bool volatile m_mtu_exchanged;
 static bool volatile m_phy_updated;
 static bool volatile m_conn_interval_configured;
 static bool volatile m_test_started = false;
+static bool volatile m_test_continuous = false;
 
 static board_role_t volatile m_board_role  = NOT_SELECTED;
 static uint16_t              m_conn_handle = BLE_CONN_HANDLE_INVALID; /**< Handle of the current BLE connection .*/
@@ -241,16 +242,19 @@ static void gap_params_init(void)
 
 }
 
-void test_run(void)
+void test_run(bool wait_for_button)
 {
-    NRF_LOG_RAW_INFO("\r\n");
-    NRF_LOG_INFO("Test is ready. Press any button to run.\r\n");
-    NRF_LOG_FLUSH();
-	
-	display_print_line_inc("Test is ready. Press any button to run.");
-	display_show();
+	if(wait_for_button)
+	{
+		NRF_LOG_RAW_INFO("\r\n");
+		NRF_LOG_INFO("Test is ready. Press any button to run.\r\n");
+		NRF_LOG_FLUSH();
+		
+		display_print_line_inc("Test is ready. Press any button to run.");
+		display_show();
 
-	(void) button_read();
+		(void) button_read();
+	}
 	
 	m_counter_started = false;
     nrf_ble_amts_notif_spam(&m_amts);
@@ -377,17 +381,28 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
             NRF_LOG_INFO("Sent %u bytes of ATT payload.\r\n", evt.bytes_transfered_cnt);
             NRF_LOG_INFO("Retrieving amount of bytes received from peer...\r\n");
 			
-			m_transfer_done = true;
-			m_display_show_transfer_data = false;
-
+			m_transfer_data.last_throughput = throughput;
+			
+			if(m_test_continuous)
+			{
+				m_run_test = false;
+			}
+			else
+			{
+				m_transfer_done = true;
+				m_display_show_transfer_data = false;
+				terminate_test();
+			}
+			
+			/*
             err_code = nrf_ble_amtc_rcb_read(&m_amtc);
             if (err_code != NRF_SUCCESS)
             {
                 NRF_LOG_ERROR("nrf_ble_amt_c_rcb_read returned 0x%x.\r\n", err_code);
                 terminate_test();
             }
-			
-			m_display_show = true;
+			*/
+
         } break;
     }
 }
@@ -398,15 +413,12 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
 {
     uint32_t err_code;
-	char str[50];
 
     switch (p_evt->evt_type)
     {
         case NRF_BLE_AMT_C_EVT_DISCOVERY_COMPLETE:
         {
             NRF_LOG_INFO("AMT service discovered on the peer.\r\n");
-			display_print_line_inc("AMT service discovered on the peer.");
-			m_display_show = true;
 			
             err_code = nrf_ble_amtc_handles_assign(p_amt_c ,
                                                     p_evt->conn_handle,
@@ -457,12 +469,6 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
 
                 NRF_LOG_INFO("AMT Transfer complete, received %u bytes.\r\n",
                              p_evt->params.hvx.bytes_rcvd);
-				
-				display_clear();
-				display_print_line_inc("Transfer complete");
-				sprintf(str, "Received %u bytes", p_evt->params.hvx.bytes_rcvd); 
-				display_print_line_inc(str);
-				m_display_show = true;
 
                 nrf_ble_amts_rbc_set(&m_amts, p_evt->params.hvx.bytes_rcvd);
             }
@@ -923,10 +929,8 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
 	{
 		if(m_test_started)
 		{
-			nrf_ble_amts_evt_t amts_evt;
-			amts_evt.bytes_transfered_cnt = m_transfer_data.bytes_transfered;
-			amts_evt.evt_type = SERVICE_EVT_TRANSFER_FINISHED;
-			amts_evt_handler(amts_evt);
+			counter_stop();
+			terminate_test();
 		}
 		m_button = pin_no;
 	}
@@ -1604,14 +1608,14 @@ void menu_print(void)
 		display_test_params_print();
 		
         NRF_LOG_INFO("Select an option:\r\n");
-        NRF_LOG_INFO(" 1) Run test.\r\n");
-		NRF_LOG_INFO(" 2) Run continuous test.\r\n");
+        NRF_LOG_INFO(" 1) Run single transfer.\r\n");
+		NRF_LOG_INFO(" 2) Run continuous transfer.\r\n");
         NRF_LOG_INFO(" 3) Adjust test parameters.\r\n");
         NRF_LOG_FLUSH();
 
 		display_print_line_inc("Select an option:");
-        display_print_line_inc(" 1) Run test.");
-		display_print_line_inc(" 2) Run continuous test.");
+        display_print_line_inc(" 1) Run single transfer.");
+		display_print_line_inc(" 2) Run continuous transfer.");
         display_print_line_inc(" 3) Adjust test parameters.");
 		display_show();
 		
@@ -1619,11 +1623,13 @@ void menu_print(void)
         {
             case BUTTON_1:
                 begin_test = true;
+				m_test_continuous = false;
                 test_begin();
                 break;
 
 			case BUTTON_2:
                 begin_test = true;
+				m_test_continuous = true;
                 test_begin();
                 break;
 			
@@ -1633,6 +1639,7 @@ void menu_print(void)
         }
     }
 
+	m_transfer_data.last_throughput = 0;
     m_print_menu = false;
 }
 
@@ -1756,7 +1763,7 @@ int main(void)
         if (is_test_ready())
         {
             m_run_test = true;
-            test_run();
+            test_run(!m_test_continuous);
         }
 
 		if(m_display_show_transfer_data)

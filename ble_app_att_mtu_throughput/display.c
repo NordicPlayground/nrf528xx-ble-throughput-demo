@@ -289,7 +289,7 @@ void display_print_line_center_inc(char * line)
 	{
 		return;
 	}
-	if(line_counter < 9)
+	if(line_counter < 10)
 	{
 		uint16_t x_pos = (FB_UTIL_LCD_WIDTH - calc_string_width(line)) / 2;
 		line_counter++;
@@ -356,6 +356,13 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	display_print_line_center_inc(str);
 	
 	display_print_line_inc("");
+	
+	if(transfer_data->last_throughput > 0)
+	{
+		sprintf(str, "Throughput last transfer: %.2f", transfer_data->last_throughput);
+		display_print_line_center_inc(str);
+	}
+		
 	display_print_line_center_inc("Press any key to terminate the test");
 	
 	display_show();
