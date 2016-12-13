@@ -349,7 +349,6 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 
         case SERVICE_EVT_TRANSFER_1KB:
         {
-			//NRF_LOG_INFO("Sent %u KBytes\r\n", (evt.bytes_transfered_cnt / 1024));
 			m_transfer_data.counter_ticks = counter_get();
 			m_transfer_data.bytes_transfered = evt.bytes_transfered_cnt;
 			m_display_show_transfer_data = true;
@@ -646,6 +645,9 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
 
 		err_code = sd_ble_gap_phy_request(p_gap_evt->conn_handle, &phys);
 		APP_ERROR_CHECK(err_code);
+		
+		//err_code = sd_ble_gap_rssi_start(m_conn_handle, BLE_GAP_RSSI_THRESHOLD_INVALID, 0);
+		//APP_ERROR_CHECK(err_code);
 	}
 	
 	
@@ -818,8 +820,6 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
  */
 static void ble_evt_dispatch(ble_evt_t * p_ble_evt)
 {
-	NRF_LOG_INFO("BLE Event: %d\r\n", p_ble_evt->header.evt_id);
-	
     on_ble_evt(p_ble_evt);
     ble_conn_params_on_ble_evt(p_ble_evt);
     ble_db_discovery_on_ble_evt(&m_ble_db_discovery, p_ble_evt);
@@ -1122,6 +1122,26 @@ void conn_evt_len_ext_set(bool status)
     err_code = sd_ble_opt_set(BLE_COMMON_OPT_CONN_EVT_EXT, &opt);
     APP_ERROR_CHECK(err_code);
 	
+	if(m_board_role == BOARD_TESTER)
+	{		
+		memset(&opt, 0x00, sizeof(opt));
+		
+		opt.common_opt.conn_bw.role = BLE_GAP_ROLE_CENTRAL;
+		
+		if(status == true)
+		{
+			opt.common_opt.conn_bw.conn_bw.conn_bw_rx = BLE_CONN_BW_HIGH;
+			opt.common_opt.conn_bw.conn_bw.conn_bw_tx = BLE_CONN_BW_HIGH;
+		}
+		else
+		{
+			opt.common_opt.conn_bw.conn_bw.conn_bw_rx = BLE_CONN_BW_LOW;
+			opt.common_opt.conn_bw.conn_bw.conn_bw_tx = BLE_CONN_BW_LOW;
+		}
+
+		err_code = sd_ble_opt_set(BLE_COMMON_OPT_CONN_BW, &opt);
+		APP_ERROR_CHECK(err_code);
+	}
 	NRF_LOG_INFO("Setting connection event extension to %d\r\n", opt.common_opt.conn_evt_ext.enable);
 }
 
@@ -1658,25 +1678,9 @@ static bool is_test_ready()
     return false;
 }
 
-//for testing the throughput by measuring the distance between each packet using logic analyzer or oscilloscope
-void radio_ppi_gpiote_init()
-{
-	NRF_GPIOTE->CONFIG[7] =   (GPIOTE_CONFIG_MODE_Task << GPIOTE_CONFIG_MODE_Pos)
-							| (GPIOTE_CONFIG_OUTINIT_High << GPIOTE_CONFIG_OUTINIT_Pos)
-							| (GPIOTE_CONFIG_POLARITY_Toggle << GPIOTE_CONFIG_POLARITY_Pos)
-							| (0 << GPIOTE_CONFIG_PORT_Pos)
-							| (16 << GPIOTE_CONFIG_PSEL_Pos);
-	
-	NRF_PPI->CH[15].EEP = (uint32_t)&NRF_RADIO->EVENTS_END;
-	NRF_PPI->CH[15].TEP = (uint32_t)&NRF_GPIOTE->TASKS_OUT[7];
-	
-	NRF_PPI->CHENSET = (PPI_CHENSET_CH15_Enabled << PPI_CHENSET_CH15_Pos);
-}
-
 int main(void)
 {
     log_init();
-	//radio_ppi_gpiote_init();
 	
 	display_init();
 	
@@ -1687,29 +1691,20 @@ int main(void)
 	buttons_init(buttons);
 
     ble_stack_init();
-
-	//The first nRF52840 does not have a unique address, therefore we must change it
-	uint32_t err_code;
-	ble_gap_addr_t address;
-	err_code = sd_ble_gap_addr_get(&address);
-	APP_ERROR_CHECK(err_code);
-	address.addr[3]++;
-	err_code = sd_ble_gap_addr_set(&address);
-	APP_ERROR_CHECK(err_code);
 	
     gap_params_init();
     conn_params_init();
     gatt_init();
     advertising_data_set();
 
-	sd_ble_gap_tx_power_set(4);
-	
     server_init();
     client_init();
 
     gatt_mtu_set(m_test_params.att_mtu);
     data_len_ext_set(m_test_params.data_len_ext_enabled);
     conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
+	
+	sd_ble_gap_tx_power_set(4);
 	
     NRF_LOG_INFO("ATT MTU example started.\r\n");
     NRF_LOG_INFO("Press button 1 on the board connected to the PC.\r\n");
