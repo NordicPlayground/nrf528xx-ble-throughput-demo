@@ -24,11 +24,6 @@
 #define DEVICE_NAME "Nordic_ATT_MTU_demo"
 #endif
 
-// <s> DEVICE_NAME - Name of device. Will be included in the advertising data.
-#ifndef DEVICE_NAME
-#define DEVICE_NAME "Nordic_ATT_MTU_demo"
-#endif
-
 // <o> NRF_BLE_CENTRAL_LINK_COUNT - Number of central links 
 #ifndef NRF_BLE_CENTRAL_LINK_COUNT
 #define NRF_BLE_CENTRAL_LINK_COUNT 1
