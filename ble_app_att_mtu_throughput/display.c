@@ -306,7 +306,7 @@ void display_print_line(char * line, uint32_t x_pos, uint8_t line_nr)
 	fb_string_put(x_pos + TEXT_LEFT_MARGIN, line_nr * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
 }
 
-void display_draw_test_run_screen(transfer_data_t *transfer_data)
+void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data)
 {
 	if(!m_display_connected)
 	{
@@ -355,7 +355,8 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	sprintf(str, "Speed: %.1f Kbits/s", throughput);
 	display_print_line_center_inc(str);
 	
-	display_print_line_inc("");
+	sprintf(str, "RSSI: %d", rssi_data->current_rssi);
+	display_print_line_center_inc(str);
 	
 	if(transfer_data->last_throughput > 0)
 	{
@@ -368,7 +369,7 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	display_show();
 }
 
-void display_test_done_screen(transfer_data_t *transfer_data)
+void display_test_done_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data)
 {
 	display_clear();
 	
@@ -390,6 +391,24 @@ void display_test_done_screen(transfer_data_t *transfer_data)
 	sprintf(str, "%.2f Kbits/s.", throughput);
 	display_print_line(str, number_x_pos, display_get_line_nr());
 	display_print_line_inc("Throughput:");
+	
+	if(rssi_data->sum != 0)
+	{
+		display_print_line_inc("");
+		
+		int8_t avg_rssi = (rssi_data->sum + (int32_t)rssi_data->nr_of_samples/2) / (int32_t)rssi_data->nr_of_samples;
+		sprintf(str, "%d dBm.", avg_rssi);
+		display_print_line(str, number_x_pos, display_get_line_nr());
+		display_print_line_inc("Average RSSI:");
+		
+		sprintf(str, "%d dBm.", rssi_data->min);
+		display_print_line(str, number_x_pos, display_get_line_nr());
+		display_print_line_inc("Min RSSI:");
+		
+		sprintf(str, "%d dBm.", rssi_data->max);
+		display_print_line(str, number_x_pos, display_get_line_nr());
+		display_print_line_inc("Max RSSI:");
+	}
 	
 	display_print_line_inc("");
 	display_print_line_inc("Press any button to exit.");

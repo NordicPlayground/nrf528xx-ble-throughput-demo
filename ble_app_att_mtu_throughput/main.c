@@ -49,7 +49,7 @@
 #define TIMER_OP_QUEUE_SIZE     4                                   /**< Size of timer operation queues. */
 
 #define ATT_MTU_DEFAULT         247                                 /**< Default ATT MTU size, in bytes. */
-#define CONN_INTERVAL_DEFAULT   MSEC_TO_UNITS(50, UNIT_1_25_MS)     /**< Default connection interval used at connection establishment by central side. */
+#define CONN_INTERVAL_DEFAULT   MSEC_TO_UNITS(400, UNIT_1_25_MS)     /**< Default connection interval used at connection establishment by central side. */
 
 #define CONN_INTERVAL_MIN       MSEC_TO_UNITS(7.5, UNIT_1_25_MS)    /**< Minimum acceptable connection interval, in 1.25 ms units. */
 #define CONN_INTERVAL_MAX       MSEC_TO_UNITS(500, UNIT_1_25_MS)    /**< Maximum acceptable connection interval, in 1.25 ms units. */
@@ -71,7 +71,6 @@
 #define THREE   '3'
 #define FOUR    '4'
 #define ENTER   '\r'
-
 
 #define BUTTON_DETECTION_DELAY    APP_TIMER_TICKS(50, TIMER_PRESCALER)       /**< Delay from a GPIOTE event until a button is reported as pushed (in number of timer ticks). */
 
@@ -111,6 +110,7 @@ static volatile bool 			m_display_show = false;
 static volatile bool 			m_display_show_transfer_data = false;
 static volatile bool			m_transfer_done = false;
 static transfer_data_t			m_transfer_data = {.kb_transfer_size = (AMT_BYTE_TRANSFER_CNT_DEFAULT/1024), .bytes_transfered = 0};
+static rssi_data_t				m_rssi_data;
 
 /**@brief Variable length data encapsulation in terms of length and pointer to data. */
 typedef struct
@@ -172,6 +172,41 @@ static ble_gap_conn_params_t m_conn_param =
     .conn_sup_timeout  = (uint16_t)CONN_SUP_TIMEOUT     // Supervisory timeout.
 };
 
+static const test_params_t ble_5_HS_version_params =
+{
+    .att_mtu                  = 247,
+    .conn_interval            = MSEC_TO_UNITS(400, UNIT_1_25_MS),
+    .data_len_ext_enabled     = true,
+    .conn_evt_len_ext_enabled = true,
+	.rxtx_phy                 = BLE_GAP_PHY_2MBPS,
+};
+
+static const test_params_t ble_5_LR_version_params =
+{
+    .att_mtu                  = 247,
+    .conn_interval            = MSEC_TO_UNITS(50, UNIT_1_25_MS),
+    .data_len_ext_enabled     = true,
+    .conn_evt_len_ext_enabled = true,
+	.rxtx_phy                 = BLE_GAP_PHY_CODED,
+};
+
+static const test_params_t ble_4_2_version_params =
+{
+    .att_mtu                  = 247,
+    .conn_interval            = MSEC_TO_UNITS(400, UNIT_1_25_MS),
+    .data_len_ext_enabled     = true,
+    .conn_evt_len_ext_enabled = true,
+	.rxtx_phy                 = BLE_GAP_PHY_1MBPS,
+};
+
+static const test_params_t ble_4_1_version_params =
+{
+    .att_mtu                  = 23,
+    .conn_interval            = MSEC_TO_UNITS(7.5, UNIT_1_25_MS),
+    .data_len_ext_enabled     = false,
+    .conn_evt_len_ext_enabled = false,
+	.rxtx_phy                 = BLE_GAP_PHY_1MBPS,
+};
 
 void advertising_start(void);
 void scan_start(void);
@@ -353,6 +388,25 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 			m_transfer_data.bytes_transfered = evt.bytes_transfered_cnt;
 			m_display_show_transfer_data = true;
             bsp_board_led_invert(LED_PROGRESS);
+			
+			int8_t rssi;
+			err_code = sd_ble_gap_rssi_get(m_conn_handle, &rssi);
+			if(err_code == NRF_SUCCESS)
+			{
+				m_rssi_data.sum += rssi;
+				m_rssi_data.nr_of_samples++;
+				m_rssi_data.current_rssi = rssi;
+				
+				if(rssi > m_rssi_data.max)
+				{
+					m_rssi_data.max = rssi;
+				}
+				if(rssi < m_rssi_data.min)
+				{
+					m_rssi_data.min = rssi;
+				}
+			}
+			
         } break;
 
         case SERVICE_EVT_TRANSFER_FINISHED:
@@ -646,8 +700,8 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
 		err_code = sd_ble_gap_phy_request(p_gap_evt->conn_handle, &phys);
 		APP_ERROR_CHECK(err_code);
 		
-		//err_code = sd_ble_gap_rssi_start(m_conn_handle, BLE_GAP_RSSI_THRESHOLD_INVALID, 0);
-		//APP_ERROR_CHECK(err_code);
+		err_code = sd_ble_gap_rssi_start(m_conn_handle, BLE_GAP_RSSI_THRESHOLD_INVALID, 0);
+		APP_ERROR_CHECK(err_code);
 	}
 	
 	
@@ -1543,6 +1597,62 @@ void test_param_adjust(void)
 	}
 }
 
+void set_all_parameters()
+{
+	gatt_mtu_set(m_test_params.att_mtu);
+    data_len_ext_set(m_test_params.data_len_ext_enabled);
+    conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
+    preferred_phy_set(m_test_params.rxtx_phy);
+}
+
+void test_param_adjust_ble_version()
+{
+	NRF_LOG_INFO("Adjust for bluetooth version.\r\n");
+	NRF_LOG_INFO(" 1) BLE 5 high speed\r\n");
+	NRF_LOG_INFO(" 2) BLE 5 long range\r\n");
+	NRF_LOG_INFO(" 3) BLE 4.2\r\n");
+	NRF_LOG_INFO(" 4) BLE 4.1\r\n")
+	NRF_LOG_FLUSH();
+	
+	display_clear();
+	
+	display_test_params_print();
+	
+	display_print_line_inc(" 1) BLE 5 high speed");
+	display_print_line_inc(" 2) BLE 5 long range");
+	display_print_line_inc(" 3) BLE 4.2");
+	display_print_line_inc(" 4) BLE 4.1");
+	display_show();
+
+	uint32_t transfer_data_size;
+	
+	switch (button_read())
+	{
+		case BUTTON_1:
+			memcpy(&m_test_params, &ble_5_HS_version_params, sizeof(test_params_t));
+			transfer_data_size = 1024;
+			break;
+		
+		case BUTTON_2:
+			memcpy(&m_test_params, &ble_5_LR_version_params, sizeof(test_params_t));
+			transfer_data_size = 100;
+			break;
+
+		case BUTTON_3:
+			memcpy(&m_test_params, &ble_4_2_version_params, sizeof(test_params_t));
+			transfer_data_size = 1024;
+			break;
+
+		case BUTTON_4:
+			memcpy(&m_test_params, &ble_4_1_version_params, sizeof(test_params_t));
+			transfer_data_size = 100;
+			break;
+	}
+	set_all_parameters();
+	amt_byte_transfer_count = transfer_data_size*1024;
+	m_transfer_data.kb_transfer_size = amt_byte_transfer_count/1024;
+}
+
 void test_params_print(void)
 {
     NRF_LOG_RAW_INFO("\r\n");
@@ -1633,10 +1743,10 @@ void menu_print(void)
         NRF_LOG_INFO(" 3) Adjust test parameters.\r\n");
         NRF_LOG_FLUSH();
 
-		display_print_line_inc("Select an option:");
         display_print_line_inc(" 1) Run single transfer.");
 		display_print_line_inc(" 2) Run continuous transfer.");
         display_print_line_inc(" 3) Adjust test parameters.");
+		display_print_line_inc(" 4) Adjust for bluetooth version");
 		display_show();
 		
         switch (button_read())
@@ -1656,10 +1766,16 @@ void menu_print(void)
             case BUTTON_3:
                 test_param_adjust();
                 break;
+			
+			case BUTTON_4:
+                test_param_adjust_ble_version();
+                break;
         }
     }
 
 	m_transfer_data.last_throughput = 0;
+	memset(&m_rssi_data, 0, sizeof(m_rssi_data));
+	m_rssi_data.max = -128;
     m_print_menu = false;
 }
 
@@ -1744,7 +1860,7 @@ int main(void)
     {
 		if(m_transfer_done)
 		{
-			display_test_done_screen(&m_transfer_data);
+			display_test_done_screen(&m_transfer_data, &m_rssi_data);
 			
 			button_read();
 			m_transfer_done = false;
@@ -1763,7 +1879,7 @@ int main(void)
 
 		if(m_display_show_transfer_data)
 		{
-			display_draw_test_run_screen(&m_transfer_data);
+			display_draw_test_run_screen(&m_transfer_data, &m_rssi_data);
 			m_display_show_transfer_data = false;
 		}
 		

@@ -15,6 +15,15 @@ typedef struct
 
 typedef struct
 {
+	int8_t current_rssi;
+	int32_t sum;
+	int8_t min;
+	int8_t max;
+	uint32_t nr_of_samples;
+} rssi_data_t;
+
+typedef struct
+{
 	uint16_t kb_transfer_size;
 	uint32_t bytes_transfered;
 	uint32_t counter_ticks;
@@ -26,8 +35,8 @@ void display_test(void);
 
 void display_draw_nordic_logo(void);
 
-void display_draw_test_run_screen(transfer_data_t *transfer_data);
-void display_test_done_screen(transfer_data_t *transfer_data);
+void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data);
+void display_test_done_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data);
 
 void display_print_line_inc(char * line);
 void display_print_line_center_inc(char * line);
