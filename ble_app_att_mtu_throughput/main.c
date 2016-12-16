@@ -1741,12 +1741,13 @@ void menu_print(void)
         NRF_LOG_INFO(" 1) Run single transfer.\r\n");
 		NRF_LOG_INFO(" 2) Run continuous transfer.\r\n");
         NRF_LOG_INFO(" 3) Adjust test parameters.\r\n");
+		NRF_LOG_INFO(" 4) Adjust for bluetooth version.\r\n");
         NRF_LOG_FLUSH();
 
         display_print_line_inc(" 1) Run single transfer.");
 		display_print_line_inc(" 2) Run continuous transfer.");
         display_print_line_inc(" 3) Adjust test parameters.");
-		display_print_line_inc(" 4) Adjust for bluetooth version");
+		display_print_line_inc(" 4) Adjust for bluetooth version.");
 		display_show();
 		
         switch (button_read())
@@ -1838,24 +1839,15 @@ int main(void)
 	{
 		m_board_role = BOARD_TESTER;
 		preferred_phy_set(m_test_params.rxtx_phy);
+		m_print_menu = true;
 	}
 	else
 	{
 		m_board_role = BOARD_DUMMY;
 		preferred_phy_set(BLE_GAP_PHY_2MBPS | BLE_GAP_PHY_1MBPS | BLE_GAP_PHY_CODED);
+		advertising_start();
 	}
 
-    if (m_board_role == BOARD_TESTER)
-    {
-        m_print_menu = true;
-    }
-    if (m_board_role == BOARD_DUMMY)
-    {
-        advertising_start();
-    }
-
-    // Enter main loop.
-    NRF_LOG_INFO("Entering main loop.\r\n");
     for (;;)
     {
 		if(m_transfer_done)
