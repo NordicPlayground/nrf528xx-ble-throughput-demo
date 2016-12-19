@@ -4,6 +4,8 @@
 
 #include "nrf.h"
 
+#define MAX_LINES						10
+
 typedef struct
 {
     uint16_t att_mtu;                   /**< GATT ATT MTU, in bytes. */

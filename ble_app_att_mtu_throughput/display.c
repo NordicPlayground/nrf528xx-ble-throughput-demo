@@ -28,6 +28,7 @@
 #define TRANSFER_BAR_HEIGHT_IN_LINES 	2
 #define TEXT_START_YPOS 				44
 #define TITLE 							"BLE THROUGHPUT DEMO"
+#define NR_OF_LINES						10
 
 #ifndef MLCD_PCA63520_2INCH7
 #error "Runs only on the PCA63520 board."
@@ -276,7 +277,7 @@ void display_print_line_inc(char * line)
 	{
 		return;
 	}
-	if(line_counter < 10)
+	if(line_counter < NR_OF_LINES)
 	{
 		line_counter++;
 		fb_string_put(TEXT_LEFT_MARGIN, (line_counter - 1) * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
@@ -289,7 +290,7 @@ void display_print_line_center_inc(char * line)
 	{
 		return;
 	}
-	if(line_counter < 10)
+	if(line_counter < NR_OF_LINES)
 	{
 		uint16_t x_pos = (FB_UTIL_LCD_WIDTH - calc_string_width(line)) / 2;
 		line_counter++;
@@ -303,7 +304,11 @@ void display_print_line(char * line, uint32_t x_pos, uint8_t line_nr)
 	{
 		return;
 	}
-	fb_string_put(x_pos + TEXT_LEFT_MARGIN, line_nr * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
+	
+	if(line_nr < NR_OF_LINES)
+	{
+		fb_string_put(x_pos + TEXT_LEFT_MARGIN, line_nr * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
+	}
 }
 
 void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data)

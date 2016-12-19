@@ -65,12 +65,11 @@
 #define LED_PROGRESS              BSP_BOARD_LED_2
 //#define LED_FINISHED              BSP_BOARD_LED_3
 
-#define YES     'y'
-#define ONE     '1'
-#define TWO     '2'
-#define THREE   '3'
-#define FOUR    '4'
-#define ENTER   '\r'
+#define BUTTON_UP				  BUTTON_1
+#define BUTTON_DOWN				  BUTTON_2
+#define BUTTON_SEL				  BUTTON_3
+#define BUTTON_BACK				  BUTTON_4
+
 
 #define BUTTON_DETECTION_DELAY    APP_TIMER_TICKS(50, TIMER_PRESCALER)       /**< Delay from a GPIOTE event until a button is reported as pushed (in number of timer ticks). */
 
@@ -183,10 +182,10 @@ static const test_params_t ble_5_HS_version_params =
 
 static const test_params_t ble_5_LR_version_params =
 {
-    .att_mtu                  = 247,
-    .conn_interval            = MSEC_TO_UNITS(50, UNIT_1_25_MS),
-    .data_len_ext_enabled     = true,
-    .conn_evt_len_ext_enabled = true,
+    .att_mtu                  = 23,
+    .conn_interval            = MSEC_TO_UNITS(7.5, UNIT_1_25_MS),
+    .data_len_ext_enabled     = false,
+    .conn_evt_len_ext_enabled = false,
 	.rxtx_phy                 = BLE_GAP_PHY_CODED,
 };
 
@@ -1770,6 +1769,106 @@ void menu_print(void)
 			
 			case BUTTON_4:
                 test_param_adjust_ble_version();
+                break;
+        }
+    }
+
+	m_transfer_data.last_throughput = 0;
+	memset(&m_rssi_data, 0, sizeof(m_rssi_data));
+	m_rssi_data.max = -128;
+    m_print_menu = false;
+}
+
+void menu_print_2()
+{
+	static const uint16_t number_pos = 220;
+	static const uint16_t text_pos = 20;
+	static const uint8_t max_index = 9;
+	
+	bool begin_test = false;
+	uint8_t index = 0;
+	uint8_t line_counter;
+	uint8_t pointer_pos;
+	char str[50];
+	
+    while (!begin_test)
+    {
+		//start scrolling if index is larger than the max lines
+		if(index >= (MAX_LINES - 1))
+		{
+			line_counter = index - MAX_LINES - 1;
+			pointer_pos = MAX_LINES - 1;
+		}
+		else
+		{
+			line_counter = 0;
+			pointer_pos = index;
+		}
+		
+		display_clear();
+
+		display_print_line("->", 0, pointer_pos);
+		
+        display_print_line("Run single transfer.", text_pos, line_counter++);
+		display_print_line("Run continuous transfer.", text_pos, line_counter++);
+		display_print_line("Adjust for bluetooth version.", text_pos, line_counter++);
+
+		sprintf(str, "%d bytes", m_test_params.att_mtu);
+		display_print_line(str, number_pos, line_counter);
+		display_print_line_inc("ATT MTU size:", text_pos, line_counter++);
+
+		sprintf(str, "%s\r\n", phy_str(m_test_params.rxtx_phy));
+		display_print_line(str, number_pos, line_counter);
+		display_print_line("Preferredy PHY:", text_pos, line_counter++);
+
+		sprintf(str, "%.2f ms", (float)m_test_params.conn_interval * 1.25);
+		display_print_line(str, number_pos, line_counter);
+		display_print_line("Conn. interval:");
+
+		sprintf(str, "%s", m_test_params.data_len_ext_enabled ?
+					 (uint32_t)"ON" :
+					 (uint32_t)"OFF");
+		display_print_line(str, number_pos, line_counter);
+		display_print_line("Data length ext. (DLE):", text_pos, line_counter++);
+
+		sprintf(str, "%s", m_test_params.conn_evt_len_ext_enabled ?
+					 (uint32_t)"ON" :
+					 (uint32_t)"OFF");
+		display_print_line(str, number_pos, line_counter);
+		display_print_line("Connection Event ext:", text_pos, line_counter++);
+
+		sprintf(str, "%d KB", m_transfer_data.kb_transfer_size);
+		display_print_line(str, number_pos, line_counter);
+		display_print_line("Transfer data size:", text_pos, line_counter++);
+		
+		display_show();
+		
+        switch (button_read())
+        {
+            case BUTTON_UP:
+                if(index < max_index)
+				{
+					index++;
+				}
+				else
+				{
+					index = 0;
+				}
+                break;
+
+			case BUTTON_DOWN:
+                if(index != 0)
+				{
+					index--;
+				}
+                break;
+			
+            case BUTTON_SEL:
+                
+                break;
+			
+			case BUTTON_BACK:
+                //no action for the main menu
                 break;
         }
     }
