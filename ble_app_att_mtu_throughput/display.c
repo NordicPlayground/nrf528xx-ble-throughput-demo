@@ -119,7 +119,7 @@ static const nrf_drv_spi_config_t m_spi_cfg =
     .ss_pin       = NRF_DRV_SPI_PIN_NOT_USED,
     .irq_priority = APP_IRQ_PRIORITY_HIGH,
     .orc          = 0xFF,
-    .frequency    = NRF_DRV_SPI_FREQ_1M,
+    .frequency    = NRF_DRV_SPI_FREQ_2M,
     .mode         = NRF_DRV_SPI_MODE_0,
     .bit_order    = NRF_DRV_SPI_BIT_ORDER_LSB_FIRST,
 };
@@ -329,7 +329,6 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *r
 	
 	display_clear();
 	
-	display_print_line_inc("");
 	display_print_line_center_inc("Transferring data:");
 	
 	//print filled bar
@@ -350,12 +349,16 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *r
 	char str[50];
 	sprintf(str, "%dKB/%dKB transferred", transfer_data->bytes_transfered/1024, transfer_data->kb_transfer_size);
 	display_print_line_center_inc(str);
-	
-	//display_print_line("kbit/s", 150, line_counter);
+
 	sprintf(str, "Speed: %.1f Kbits/s", throughput);
 	display_print_line_center_inc(str);
 	
-	sprintf(str, "RSSI: %d", rssi_data->current_rssi);
+	sprintf(str, "Link budget: %d", rssi_data->link_budget);
+	//sprintf(str, "RSSI: %d", rssi_data->current_rssi);
+	display_print_line_center_inc(str);
+	
+	sprintf(str, "Range multiplier: %d", rssi_data->range_multiplier);
+	//sprintf(str, "RSSI average: %.f", rssi_data->moving_average);
 	display_print_line_center_inc(str);
 	
 	if(transfer_data->last_throughput > 0)
@@ -400,14 +403,6 @@ void display_test_done_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_
 		sprintf(str, "%d dBm.", avg_rssi);
 		display_print_line(str, number_x_pos, display_get_line_nr());
 		display_print_line_inc("Average RSSI:");
-		
-		sprintf(str, "%d dBm.", rssi_data->min);
-		display_print_line(str, number_x_pos, display_get_line_nr());
-		display_print_line_inc("Min RSSI:");
-		
-		sprintf(str, "%d dBm.", rssi_data->max);
-		display_print_line(str, number_x_pos, display_get_line_nr());
-		display_print_line_inc("Max RSSI:");
 	}
 	
 	display_print_line_inc("");
