@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "amt.h"
 #include "counter.h"
@@ -75,6 +76,14 @@
 
 #define LL_HEADER_LEN             4
 
+#define SENSITIVITY_125KBPS	      (-103)
+#define SENSITIVITY_1MBPS	      (-96)
+#define SENSITIVITY_2MBPS	      (-93)
+
+#define RSSI_MOVING_AVERAGE_ALPHA	0.5		//higher value will lower the frequency of the filter
+
+#define DISPLAY_TIMER_UPDATE_INTERVAL	APP_TIMER_TICKS(200, TIMER_PRESCALER)
+APP_TIMER_DEF(m_display_timer_id);
 
 typedef enum
 {
@@ -82,16 +91,6 @@ typedef enum
     BOARD_TESTER,
     BOARD_DUMMY,
 } board_role_t;
-
-
-//TODO: this is now in display.h, needs to be moved
-//typedef struct
-//{
-//    uint16_t att_mtu;                   /**< GATT ATT MTU, in bytes. */
-//    uint16_t conn_interval;             /**< Connection interval expressed in units of 1.25 ms. */
-//    bool     data_len_ext_enabled;      /**< Data length extension status. */
-//    bool     conn_evt_len_ext_enabled;  /**< Connection event length extension status. */
-//} test_params_t;
 
 static void button_event_handler(uint8_t pin_no, uint8_t button_action);
 	
@@ -103,7 +102,7 @@ static app_button_cfg_t buttons[] =
 	{BUTTON_4,  false, BUTTON_PULL, button_event_handler}
 };
 
-uint8_t m_button = 0xff;
+static uint8_t m_button = 0xff;
 
 static volatile bool 			m_display_show = false;
 static volatile bool 			m_display_show_transfer_data = false;
@@ -149,6 +148,7 @@ static test_params_t m_test_params =
     .data_len_ext_enabled     = true,
     .conn_evt_len_ext_enabled = true,
 	.rxtx_phy                 = BLE_GAP_PHY_2MBPS,
+	.tx_power				  = 8,
 };
 
 /* Scan parameters requested for scanning and connection. */
@@ -178,6 +178,7 @@ static const test_params_t ble_5_HS_version_params =
     .data_len_ext_enabled     = true,
     .conn_evt_len_ext_enabled = true,
 	.rxtx_phy                 = BLE_GAP_PHY_2MBPS,
+	.tx_power				  = 8,	
 };
 
 static const test_params_t ble_5_LR_version_params =
@@ -187,6 +188,7 @@ static const test_params_t ble_5_LR_version_params =
     .data_len_ext_enabled     = false,
     .conn_evt_len_ext_enabled = false,
 	.rxtx_phy                 = BLE_GAP_PHY_CODED,
+	.tx_power				  = 8,
 };
 
 static const test_params_t ble_4_2_version_params =
@@ -196,6 +198,7 @@ static const test_params_t ble_4_2_version_params =
     .data_len_ext_enabled     = true,
     .conn_evt_len_ext_enabled = true,
 	.rxtx_phy                 = BLE_GAP_PHY_1MBPS,
+	.tx_power				  = 4,
 };
 
 static const test_params_t ble_4_1_version_params =
@@ -205,6 +208,7 @@ static const test_params_t ble_4_1_version_params =
     .data_len_ext_enabled     = false,
     .conn_evt_len_ext_enabled = false,
 	.rxtx_phy                 = BLE_GAP_PHY_1MBPS,
+	.tx_power				  = 4,
 };
 
 void advertising_start(void);
@@ -294,7 +298,7 @@ void test_run(bool wait_for_button)
     nrf_ble_amts_notif_spam(&m_amts);
 	
 	m_test_started = true;
-	buttons_enable();
+	app_timer_start(m_display_timer_id, DISPLAY_TIMER_UPDATE_INTERVAL, NULL);
 }
 
 void terminate_test(void)
@@ -306,7 +310,7 @@ void terminate_test(void)
     m_conn_interval_configured = false;
 	m_test_started				= false;
 	
-	buttons_disable();
+	app_timer_stop(m_display_timer_id);
 	
     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
@@ -383,28 +387,7 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 
         case SERVICE_EVT_TRANSFER_1KB:
         {
-			m_transfer_data.counter_ticks = counter_get();
-			m_transfer_data.bytes_transfered = evt.bytes_transfered_cnt;
-			m_display_show_transfer_data = true;
             bsp_board_led_invert(LED_PROGRESS);
-			
-			int8_t rssi;
-			err_code = sd_ble_gap_rssi_get(m_conn_handle, &rssi);
-			if(err_code == NRF_SUCCESS)
-			{
-				m_rssi_data.sum += rssi;
-				m_rssi_data.nr_of_samples++;
-				m_rssi_data.current_rssi = rssi;
-				
-				if(rssi > m_rssi_data.max)
-				{
-					m_rssi_data.max = rssi;
-				}
-				if(rssi < m_rssi_data.min)
-				{
-					m_rssi_data.min = rssi;
-				}
-			}
 			
         } break;
 
@@ -856,7 +839,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 				m_counter_started = true;
 			}
 			break;
-		
+			
         default:
             // No implementation needed.
             break;
@@ -1022,7 +1005,7 @@ static void buttons_disable(void)
 uint8_t button_read(void)
 {
 	m_button = 0xff;
-    buttons_enable();
+    //buttons_enable();
 
     while (m_button == 0xff)
     {
@@ -1032,7 +1015,7 @@ uint8_t button_read(void)
         }
     }
 
-    buttons_disable();
+    //buttons_disable();
 	return m_button;
 }
 
@@ -1220,6 +1203,37 @@ void data_len_ext_set(bool status)
     APP_ERROR_CHECK(err_code);
 }
 
+void update_link_budget()
+{
+	int8_t sensitivity;
+	
+	switch(m_test_params.rxtx_phy)
+	{
+		case BLE_GAP_PHY_2MBPS:
+			sensitivity = SENSITIVITY_2MBPS;
+			break;
+		case BLE_GAP_PHY_1MBPS:
+			sensitivity = SENSITIVITY_1MBPS;
+			break;
+		case BLE_GAP_PHY_CODED:
+			sensitivity = SENSITIVITY_125KBPS;
+			break;
+		default:
+			APP_ERROR_CHECK(NRF_ERROR_INVALID_STATE);
+			break;
+	}
+	
+	m_test_params.link_budget = m_test_params.tx_power - sensitivity;
+}
+
+void tx_power_set(int8_t tx_power)
+{
+	uint32_t err_code;
+	err_code = sd_ble_gap_tx_power_set(tx_power);
+	APP_ERROR_CHECK(err_code);
+	
+	update_link_budget();
+}
 
 void preferred_phy_select(void)
 {
@@ -1258,6 +1272,8 @@ void preferred_phy_select(void)
 
     NRF_LOG_INFO("Preferred PHY set to %s.\r\n", phy_str(m_test_params.rxtx_phy));
     NRF_LOG_FLUSH();
+	
+	update_link_budget();
 }
 
 void att_mtu_select(void)
@@ -1602,6 +1618,7 @@ void set_all_parameters()
     data_len_ext_set(m_test_params.data_len_ext_enabled);
     conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
     preferred_phy_set(m_test_params.rxtx_phy);
+	tx_power_set(m_test_params.tx_power);
 }
 
 void test_param_adjust_ble_version()
@@ -1696,11 +1713,17 @@ void display_test_params_print()
 	display_print_line(str, number_pos, display_get_line_nr());
 	display_print_line_inc("Data length ext. (DLE):");
 	
+	/*
 	sprintf(str, "%s", m_test_params.conn_evt_len_ext_enabled ?
                  (uint32_t)"ON" :
                  (uint32_t)"OFF");
 	display_print_line(str, number_pos, display_get_line_nr());
 	display_print_line_inc("Connection Event ext:");
+	*/
+	
+	sprintf(str, "%d dBm", m_test_params.link_budget);
+	display_print_line(str, number_pos, display_get_line_nr());
+	display_print_line_inc("Link budget:");
 	
 	sprintf(str, "%d KB", m_transfer_data.kb_transfer_size);
 	display_print_line(str, number_pos, display_get_line_nr());
@@ -1894,6 +1917,46 @@ static bool is_test_ready()
     return false;
 }
 
+static void display_timer_handler(void *p_context)
+{
+	m_transfer_data.counter_ticks = counter_get();
+	m_transfer_data.bytes_transfered = m_amts.bytes_sent;
+	m_display_show_transfer_data = true;
+	
+	int8_t rssi;
+	uint32_t err_code;
+	
+	err_code = sd_ble_gap_rssi_get(m_conn_handle, &rssi);
+	if(err_code == NRF_SUCCESS)
+	{
+		if(m_rssi_data.nr_of_samples == 0)
+		{
+			m_rssi_data.moving_average = rssi;
+		}
+		else
+		{
+			m_rssi_data.moving_average = 
+					(float)m_rssi_data.moving_average * RSSI_MOVING_AVERAGE_ALPHA
+					+ (float)rssi * (1.0 - RSSI_MOVING_AVERAGE_ALPHA);
+		}
+		
+		m_rssi_data.sum += rssi;
+		m_rssi_data.nr_of_samples++;
+		m_rssi_data.current_rssi = rssi;
+		//check in case the RSSI value magically drops below the spec
+		if( (-m_rssi_data.moving_average) > (m_test_params.link_budget - m_test_params.tx_power))
+		{
+			m_rssi_data.link_budget = 0;
+		}
+		else
+		{
+			m_rssi_data.link_budget = m_test_params.link_budget - m_test_params.tx_power + m_rssi_data.moving_average;
+		}
+		
+		m_rssi_data.range_multiplier = pow(10.0, (double)m_rssi_data.link_budget/20.0);
+	}
+}
+
 int main(void)
 {
     log_init();
@@ -1904,9 +1967,16 @@ int main(void)
     timer_init();
     counter_init();
 	
+	uint32_t err_code;
+	err_code = app_timer_create(&m_display_timer_id, APP_TIMER_MODE_REPEATED, display_timer_handler);
+	APP_ERROR_CHECK(err_code);
+	
 	buttons_init(buttons);
-
+	buttons_enable();
+	
     ble_stack_init();
+	
+	sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
 	
     gap_params_init();
     conn_params_init();
@@ -1920,7 +1990,7 @@ int main(void)
     data_len_ext_set(m_test_params.data_len_ext_enabled);
     conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
 	
-	sd_ble_gap_tx_power_set(4);
+	tx_power_set(m_test_params.tx_power);
 	
     NRF_LOG_INFO("ATT MTU example started.\r\n");
     NRF_LOG_INFO("Press button 1 on the board connected to the PC.\r\n");
