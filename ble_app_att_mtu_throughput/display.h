@@ -3,6 +3,7 @@
 #define DISPLAY_H
 
 #include "nrf.h"
+#include <stdbool.h>
 
 #define MAX_LINES						10
 

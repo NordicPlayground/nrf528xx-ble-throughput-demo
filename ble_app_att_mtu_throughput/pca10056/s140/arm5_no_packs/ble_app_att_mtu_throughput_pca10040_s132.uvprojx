@@ -419,6 +419,11 @@
               <FileType>1</FileType>
               <FilePath>..\..\..\my_fonts.c</FilePath>
             </File>
+            <File>
+              <FileName>menu.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\menu.c</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -2445,6 +2450,11 @@
               <FileName>my_fonts.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\..\..\my_fonts.c</FilePath>
+            </File>
+            <File>
+              <FileName>menu.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\..\menu.c</FilePath>
             </File>
           </Files>
         </Group>

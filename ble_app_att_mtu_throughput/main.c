@@ -67,8 +67,8 @@
 //#define LED_FINISHED              BSP_BOARD_LED_3
 
 #define BUTTON_UP				  BUTTON_1
-#define BUTTON_DOWN				  BUTTON_2
-#define BUTTON_SEL				  BUTTON_3
+#define BUTTON_DOWN				  BUTTON_3
+#define BUTTON_SEL				  BUTTON_2
 #define BUTTON_BACK				  BUTTON_4
 
 
@@ -219,7 +219,6 @@ uint8_t button_read(void);
 void buttons_enable(void);
 void buttons_disable(void);
 static void wait_for_event(void);
-void menu_print(void);
 
 /**@brief Callback function for asserts in the SoftDevice.
  *
@@ -992,16 +991,6 @@ static void buttons_enable(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
-/**@brief Function for disabling button input.
- */
-static void buttons_disable(void)
-{
-    ret_code_t err_code;
-    err_code = app_button_disable();
-    APP_ERROR_CHECK(err_code);
-}
-
 uint8_t button_read(void)
 {
 	m_button = 0xff;
@@ -1235,383 +1224,6 @@ void tx_power_set(int8_t tx_power)
 	update_link_budget();
 }
 
-void preferred_phy_select(void)
-{
-    NRF_LOG_INFO("Select preferred PHY:\r\n");
-    NRF_LOG_INFO(" 1) 1 MBit.\r\n");
-    NRF_LOG_INFO(" 2) 2 MBits.\r\n");
-    NRF_LOG_INFO(" 3) 125 KBits (long range).\r\n");
-    NRF_LOG_FLUSH();
-
-	display_clear();
-	display_test_params_print();
-	
-	display_print_line_inc("Select preferred PHY:");
-	display_print_line_inc(" 1) 1 MBit.");
-	display_print_line_inc(" 2) 2 MBit.");
-	display_print_line_inc(" 3) 125 KBits (long range).");
-	display_show();
-	
-    switch (button_read())
-    {
-        default:
-        case BUTTON_1:
-            m_test_params.rxtx_phy = BLE_GAP_PHY_1MBPS;
-            break;
-
-        case BUTTON_2:
-            m_test_params.rxtx_phy = BLE_GAP_PHY_2MBPS;
-            break;
-
-        case BUTTON_3:
-            m_test_params.rxtx_phy = BLE_GAP_PHY_CODED;
-            break;
-    }
-
-	preferred_phy_set(m_test_params.rxtx_phy);
-
-    NRF_LOG_INFO("Preferred PHY set to %s.\r\n", phy_str(m_test_params.rxtx_phy));
-    NRF_LOG_FLUSH();
-	
-	update_link_budget();
-}
-
-void att_mtu_select(void)
-{
-    NRF_LOG_INFO("Select an ATT MTU size:\r\n");
-    NRF_LOG_INFO(" 1) 23 bytes.\r\n");
-    NRF_LOG_INFO(" 2) 158 bytes.\r\n");
-    NRF_LOG_INFO(" 3) 247 bytes.\r\n");
-    NRF_LOG_FLUSH();
-	
-	display_clear();
-	display_test_params_print();
-	
-	display_print_line_inc("Select an ATT MTU size:");
-	display_print_line_inc(" 1) 23 bytes.");
-	display_print_line_inc(" 2) 158 bytes.");
-	display_print_line_inc(" 3) 247 bytes.");
-	display_show();
-
-    switch (button_read())
-    {
-        case BUTTON_1:
-        default:
-            m_test_params.att_mtu = 23;
-            break;
-
-        case BUTTON_2:
-            m_test_params.att_mtu = 158;
-            break;
-
-        case BUTTON_3:
-            m_test_params.att_mtu = 247;
-            break;
-    }
-
-    gatt_mtu_set(m_test_params.att_mtu);
-	data_len_ext_set(m_test_params.data_len_ext_enabled);
-	
-    NRF_LOG_INFO("ATT MTU set to %d bytes.\r\n", m_test_params.att_mtu);
-    NRF_LOG_FLUSH();
-}
-
-
-void conn_interval_select(void)
-{
-    NRF_LOG_INFO("Select a connection interval:\r\n");
-    NRF_LOG_INFO(" 1) 7.5 ms\r\n");
-    NRF_LOG_INFO(" 2) 50 ms\r\n");
-    NRF_LOG_INFO(" 3) 400 ms\r\n");
-    NRF_LOG_FLUSH();
-	
-	display_clear();
-	display_test_params_print();
-	
-	display_print_line_inc("Select a connection interval:");
-	display_print_line_inc(" 1) 7.5 ms");
-	display_print_line_inc(" 2) 50 ms");
-	display_print_line_inc(" 3) 400 ms");
-	display_show();
-
-    switch (button_read())
-    {
-        case BUTTON_1:
-        default:
-            m_test_params.conn_interval = (uint16_t)(MSEC_TO_UNITS(7.5, UNIT_1_25_MS));
-            break;
-
-        case BUTTON_2:
-            m_test_params.conn_interval = (uint16_t)(MSEC_TO_UNITS(50, UNIT_1_25_MS));
-            break;
-
-        case BUTTON_3:
-            m_test_params.conn_interval = (uint16_t)(MSEC_TO_UNITS(400, UNIT_1_25_MS));
-            break;
-    }
-
-    NRF_LOG_INFO("Connection interval set to 0x%x.\r\n", m_test_params.conn_interval);
-    NRF_LOG_FLUSH();
-}
-
-
-void data_len_ext_select(void)
-{
-    NRF_LOG_INFO("Turn on Data Length Extension? (y/n)\r\n");
-    NRF_LOG_FLUSH();
-	
-	display_clear();
-	display_test_params_print();
-	
-	display_print_line_inc("Turn on Data Length Extension?");
-	display_print_line_inc(" 1) Yes");
-	display_print_line_inc(" 2) No");
-	display_show();
-
-    uint8_t answer = button_read();
-    NRF_LOG_INFO("Data Length Extension is %s\r\n", (answer == BUTTON_1) ?
-                 (uint32_t) "ON" :
-                 (uint32_t) "OFF");
-    NRF_LOG_FLUSH();
-
-    m_test_params.data_len_ext_enabled = (answer == BUTTON_1) ? 1 : 0;
-
-    data_len_ext_set(m_test_params.data_len_ext_enabled);
-}
-
-void conn_evt_ext_select(void)
-{
-    NRF_LOG_INFO("Turn on Connection Event Extension?r\n");
-    NRF_LOG_FLUSH();
-
-    display_clear();
-	display_test_params_print();
-	
-	display_print_line_inc("Turn on Connection Event Extension?");
-	display_print_line_inc(" 1) Yes");
-	display_print_line_inc(" 2) No");
-	display_show();
-
-    uint8_t answer = button_read();
-    NRF_LOG_INFO("Connection Event Extension is %s\r\n", (answer == BUTTON_1) ?
-                 (uint32_t) "ON" :
-                 (uint32_t) "OFF");
-    NRF_LOG_FLUSH();
-
-    m_test_params.conn_evt_len_ext_enabled = (answer == BUTTON_1) ? 1 : 0;
-	conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
-}
-
-void transfer_data_length_select(void)
-{
-	NRF_LOG_INFO("Select transfer data size \r\n");
-    NRF_LOG_INFO(" 1) 100KB\r\n");
-    NRF_LOG_INFO(" 2) 500KB\r\n");
-    NRF_LOG_INFO(" 3) 1MB\r\n");
-    NRF_LOG_FLUSH();
-	
-	display_clear();
-	display_test_params_print();
-	
-	display_print_line_inc("Select transfer data size:");
-	display_print_line_inc(" 1) 100KB");
-	display_print_line_inc(" 2) 500KB");
-	display_print_line_inc(" 3) 1MB");
-	display_show();
-
-	switch (button_read())
-    {
-        case BUTTON_1:
-        default:
-            amt_byte_transfer_count = 100*1024;
-            break;
-
-        case BUTTON_2:
-            amt_byte_transfer_count = 500*1024;
-            break;
-
-        case BUTTON_3:
-            amt_byte_transfer_count = 1024*1024;
-            break;
-    }
-
-	m_transfer_data.kb_transfer_size = amt_byte_transfer_count/1024;
-    NRF_LOG_INFO("Transfer data size set to %d KB\r\n", m_transfer_data.kb_transfer_size);
-    
-    NRF_LOG_FLUSH();
-}
-
-bool test_param_adjust_page_1(void)
-{
-    bool done = false;
-	bool back = false;
-
-    while (!done)
-    {
-        NRF_LOG_INFO("Adjust test parameters.\r\n");
-        NRF_LOG_INFO(" 1) Select ATT MTU size.\r\n");
-        NRF_LOG_INFO(" 2) Select connection interval.\r\n");
-        NRF_LOG_INFO(" 3) Next page.\r\n");
-		NRF_LOG_INFO(" 4) Back.\r\n")
-        NRF_LOG_FLUSH();
-		
-		display_clear();
-		
-		display_test_params_print();
-		
-        display_print_line_inc(" 1) Select ATT MTU size");
-        display_print_line_inc(" 2) Select connection interval");
-        display_print_line_inc(" 3) Next page.");
-        display_print_line_inc(" 4) Back.");
-        display_show();
-
-        switch (button_read())
-        {
-            case BUTTON_1:
-                att_mtu_select();
-                break;
-
-            case BUTTON_2:
-                conn_interval_select();
-                break;
-
-            case BUTTON_3:
-				done = true;
-                break;
-
-            case BUTTON_4:
-            default:
-				back = true;
-                done = true;
-                break;
-        }
-    }
-	return back;
-}
-
-bool test_param_adjust_page_2(void)
-{
-    bool done = false;
-	bool back = false;
-
-    while (!done)
-    {
-        NRF_LOG_INFO("Adjust test parameters.\r\n");
-        NRF_LOG_INFO(" 1) Turn on/off Data length extension (DLE).\r\n");
-		NRF_LOG_INFO(" 2) Select preferred PHY.\r\n")
-		NRF_LOG_INFO(" 3) Next page.\r\n");
-		NRF_LOG_INFO(" 4) Back.\r\n")
-        NRF_LOG_FLUSH();
-		
-		display_clear();
-		
-		display_test_params_print();
-		
-		//display_print_line_inc("Adjust test parameters");
-        display_print_line_inc(" 1) Turn on/off Data length ext. (DLE)");
-        display_print_line_inc(" 2) Select preferred PHY.");
-		display_print_line_inc(" 3) Next page.");
-        display_print_line_inc(" 4) Back.");
-        display_show();
-
-        switch (button_read())
-        {
-            case BUTTON_1:
-                data_len_ext_select();
-                break;
-
-            case BUTTON_2:
-                preferred_phy_select();
-                break;
-
-            case BUTTON_3:
-                done = true;
-                break;
-
-            case BUTTON_4:
-            default:
-				back = true;
-                done = true;
-                break;
-        }
-    }
-	return back;
-}
-
-bool test_param_adjust_page_3(void)
-{
-    bool done = false;
-	bool back = false;
-
-    while (!done)
-    {
-        NRF_LOG_INFO("Adjust test parameters.\r\n");
-		NRF_LOG_INFO(" 1) Turn on/off Connection Event ext.\r\n");
-        NRF_LOG_INFO(" 2) Select transfer data size.\r\n");
-		NRF_LOG_INFO(" 3) Next page.\r\n");
-		NRF_LOG_INFO(" 4) Back.\r\n")
-        NRF_LOG_FLUSH();
-		
-		display_clear();
-		
-		display_test_params_print();
-		
-		display_print_line_inc(" 1) Turn on/off Connection Event ext.");
-        display_print_line_inc(" 2) Select transfer data size.");
-		display_print_line_inc(" 3) Next page.");
-        display_print_line_inc(" 4) Back.");
-        display_show();
-
-        switch (button_read())
-        {
-            case BUTTON_1:
-				conn_evt_ext_select();
-                break;
-			
-			case BUTTON_2:
-				transfer_data_length_select();
-				break;
-
-            case BUTTON_3:
-                done = true;
-                break;
-
-            case BUTTON_4:
-                back = true;
-                done = true;
-            default:
-				
-                break;
-        }
-    }
-	return back;
-}
-
-void test_param_adjust(void)
-{
-	bool back = false;
-	uint8_t page = 0;
-	
-	while(!back)
-	{
-		if(page == 0)
-		{
-			back = test_param_adjust_page_1();
-			page++;
-		}
-		else if(page == 1)
-		{
-			back = test_param_adjust_page_2();
-			page++;
-		}
-		else
-		{
-			back = test_param_adjust_page_3();
-			page = 0;
-		}
-	}
-}
-
 void set_all_parameters()
 {
 	gatt_mtu_set(m_test_params.att_mtu);
@@ -1619,115 +1231,6 @@ void set_all_parameters()
     conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
     preferred_phy_set(m_test_params.rxtx_phy);
 	tx_power_set(m_test_params.tx_power);
-}
-
-void test_param_adjust_ble_version()
-{
-	NRF_LOG_INFO("Adjust for bluetooth version.\r\n");
-	NRF_LOG_INFO(" 1) BLE 5 high speed\r\n");
-	NRF_LOG_INFO(" 2) BLE 5 long range\r\n");
-	NRF_LOG_INFO(" 3) BLE 4.2\r\n");
-	NRF_LOG_INFO(" 4) BLE 4.1\r\n")
-	NRF_LOG_FLUSH();
-	
-	display_clear();
-	
-	display_test_params_print();
-	
-	display_print_line_inc(" 1) BLE 5 high speed");
-	display_print_line_inc(" 2) BLE 5 long range");
-	display_print_line_inc(" 3) BLE 4.2");
-	display_print_line_inc(" 4) BLE 4.1");
-	display_show();
-
-	uint32_t transfer_data_size;
-	
-	switch (button_read())
-	{
-		case BUTTON_1:
-			memcpy(&m_test_params, &ble_5_HS_version_params, sizeof(test_params_t));
-			transfer_data_size = 1024;
-			break;
-		
-		case BUTTON_2:
-			memcpy(&m_test_params, &ble_5_LR_version_params, sizeof(test_params_t));
-			transfer_data_size = 100;
-			break;
-
-		case BUTTON_3:
-			memcpy(&m_test_params, &ble_4_2_version_params, sizeof(test_params_t));
-			transfer_data_size = 1024;
-			break;
-
-		case BUTTON_4:
-			memcpy(&m_test_params, &ble_4_1_version_params, sizeof(test_params_t));
-			transfer_data_size = 100;
-			break;
-	}
-	set_all_parameters();
-	amt_byte_transfer_count = transfer_data_size*1024;
-	m_transfer_data.kb_transfer_size = amt_byte_transfer_count/1024;
-}
-
-void test_params_print(void)
-{
-    NRF_LOG_RAW_INFO("\r\n");
-    NRF_LOG_INFO("Current test configuration:\r\n");
-    NRF_LOG_INFO("===============================\r\n");
-    NRF_LOG_INFO("ATT MTU size: %d\r\n", m_test_params.att_mtu);
-	NRF_LOG_INFO("Preferredy PHY: %s\r\n", phy_str(m_test_params.rxtx_phy));
-    NRF_LOG_INFO("Conn. interval: 0x%x\r\n", m_test_params.conn_interval);
-    NRF_LOG_INFO("Data length extension (DLE): %s\r\n", m_test_params.data_len_ext_enabled ?
-                 (uint32_t)"ON" :
-                 (uint32_t)"OFF");
-    NRF_LOG_INFO("Conn. event length ext.: %s\r\n", m_test_params.conn_evt_len_ext_enabled ?
-                 (uint32_t)"ON" :
-                 (uint32_t)"OFF");
-    NRF_LOG_INFO("===============================\r\n");
-    NRF_LOG_RAW_INFO("\r\n");
-    NRF_LOG_FLUSH();
-    
-}
-
-void display_test_params_print()
-{
-	char str[50];
-	uint16_t number_pos = 220;
-	
-	sprintf(str, "%d bytes", m_test_params.att_mtu);
-	display_print_line(str, number_pos, display_get_line_nr());
-	display_print_line_inc("ATT MTU size:");
-	
-	
-	sprintf(str, "%s\r\n", phy_str(m_test_params.rxtx_phy));
-	display_print_line(str, number_pos, display_get_line_nr());
-	display_print_line_inc("Preferredy PHY:");
-	
-    sprintf(str, "%.2f ms", (float)m_test_params.conn_interval * 1.25);
-	display_print_line(str, number_pos, display_get_line_nr());
-	display_print_line_inc("Conn. interval:");
-    
-	sprintf(str, "%s", m_test_params.data_len_ext_enabled ?
-                 (uint32_t)"ON" :
-                 (uint32_t)"OFF");
-	display_print_line(str, number_pos, display_get_line_nr());
-	display_print_line_inc("Data length ext. (DLE):");
-	
-	/*
-	sprintf(str, "%s", m_test_params.conn_evt_len_ext_enabled ?
-                 (uint32_t)"ON" :
-                 (uint32_t)"OFF");
-	display_print_line(str, number_pos, display_get_line_nr());
-	display_print_line_inc("Connection Event ext:");
-	*/
-	
-	sprintf(str, "%d dBm", m_test_params.link_budget);
-	display_print_line(str, number_pos, display_get_line_nr());
-	display_print_line_inc("Link budget:");
-	
-	sprintf(str, "%d KB", m_transfer_data.kb_transfer_size);
-	display_print_line(str, number_pos, display_get_line_nr());
-	display_print_line_inc("Transfer data size:");
 }
 
 
@@ -1748,158 +1251,257 @@ void test_begin(void)
     }
 }
 
+typedef void (*handler_t)(uint32_t option_index);
 
-void menu_print(void)
+typedef struct
 {
-    bool begin_test = false;
+	char *title;
+	handler_t callback;
+	void *next;
+} menu_option_t;
 
-    while (!begin_test)
-    {
-		display_clear();
-        test_params_print();
-		display_test_params_print();
-		
-        NRF_LOG_INFO("Select an option:\r\n");
-        NRF_LOG_INFO(" 1) Run single transfer.\r\n");
-		NRF_LOG_INFO(" 2) Run continuous transfer.\r\n");
-        NRF_LOG_INFO(" 3) Adjust test parameters.\r\n");
-		NRF_LOG_INFO(" 4) Adjust for bluetooth version.\r\n");
-        NRF_LOG_FLUSH();
+typedef struct
+{
+	uint8_t nr_of_options;
+	void *prev;
+	menu_option_t *options;
+	bool show_values;
+	uint8_t index;
+} menu_page_t;
 
-        display_print_line_inc(" 1) Run single transfer.");
-		display_print_line_inc(" 2) Run continuous transfer.");
-        display_print_line_inc(" 3) Adjust test parameters.");
-		display_print_line_inc(" 4) Adjust for bluetooth version.");
-		display_show();
-		
-        switch (button_read())
-        {
-            case BUTTON_1:
-                begin_test = true;
-				m_test_continuous = false;
-                test_begin();
-                break;
-
-			case BUTTON_2:
-                begin_test = true;
-				m_test_continuous = true;
-                test_begin();
-                break;
-			
-            case BUTTON_3:
-                test_param_adjust();
-                break;
-			
-			case BUTTON_4:
-                test_param_adjust_ble_version();
-                break;
-        }
-    }
-
-	m_transfer_data.last_throughput = 0;
-	memset(&m_rssi_data, 0, sizeof(m_rssi_data));
-	m_rssi_data.max = -128;
-    m_print_menu = false;
+void test_func(uint32_t option_index)
+{
+	
 }
 
-void menu_print_2()
+menu_page_t menu_main_page;
+
+//BLE VERSION OPTIONS
+
+menu_option_t menu_version_options[4] = 
+{
+	{"BLE 5 HS", test_func, &menu_main_page},
+	{"BLE 5 LR", test_func, &menu_main_page},
+	{"BLE 4.2", test_func, &menu_main_page},
+	{"BLE 4.1", test_func, &menu_main_page},
+};
+
+menu_page_t menu_version_page = {4, &menu_main_page, menu_version_options, false};
+
+//PHY OPTIONS
+
+menu_option_t menu_phy_options[3] = 
+{
+	{"2 Mbps (High Speed)", test_func, &menu_main_page},
+	{"1 Mbps", test_func, &menu_main_page},
+	{"125 Kbps (long range)", test_func, &menu_main_page},
+};
+
+menu_page_t menu_phy_page = {3, &menu_main_page, menu_phy_options, false};
+
+//CONNECTION INTERVAL OPTIONS
+
+float conn_int_options[3] = {7.5, 50, 400};
+
+menu_option_t menu_conn_int_options[3] = 
+{
+	{"7.5 ms", test_func, &menu_main_page},
+	{"50 ms", test_func, &menu_main_page},
+	{"400 ms", test_func, &menu_main_page},
+};
+
+menu_page_t menu_conn_int_page = {3, &menu_main_page, menu_conn_int_options, false};
+
+//ATT MTU SIZE OPTIONS
+
+uint32_t att_mtu_options[3] = {23, 158, 247};
+
+menu_option_t menu_att_mtu_options[3] = 
+{
+	{"23 bytes", test_func, &menu_main_page},
+	{"158 bytes", test_func, &menu_main_page},
+	{"247 bytes", test_func, &menu_main_page},
+};
+
+menu_page_t menu_att_mtu_page = {3, &menu_main_page, menu_att_mtu_options, false};
+
+//DATA LENGTH EXTENSION OPTIONS
+
+bool dle_option;
+
+menu_option_t menu_dle_options[2] = 
+{
+	{"ON", test_func, &menu_main_page},
+	{"OFF", test_func, &menu_main_page},
+};
+
+menu_page_t menu_dle_page = {2, &menu_main_page, menu_dle_options, false};
+
+//CONNECTION EVENT LENGTH EXTENSION OPTIONS
+
+bool conn_evt_ext_option;
+
+menu_option_t menu_conn_evt_ext_options[2] = 
+{
+	{"ON", test_func, &menu_main_page},
+	{"OFF", test_func, &menu_main_page},
+};
+
+menu_page_t menu_conn_evt_ext_page = {2, &menu_main_page, menu_conn_evt_ext_options, false};
+
+//TX POWER OPTIONS
+
+uint32_t tx_power_options[3] = {0, 4, 8};
+
+menu_option_t menu_tx_power_options[3] = 
+{
+	{"0 dBm", test_func, &menu_main_page},
+	{"4 dBm", test_func, &menu_main_page},
+	{"8 dBm", test_func, &menu_main_page},
+};
+
+menu_page_t menu_tx_power_page = {3, &menu_main_page, menu_tx_power_options, false};
+
+//TRANSFER DATA SIZE OPTIONS
+
+uint32_t transfer_data_size_options[3] = {100, 500, 1024};
+
+menu_option_t menu_transfer_data_size_options[3] = 
+{
+	{"100 KB", test_func, &menu_main_page},
+	{"500 KB", test_func, &menu_main_page},
+	{"1 MB", test_func, &menu_main_page},
+};
+
+menu_page_t menu_transfer_data_size_page = {3, &menu_main_page, menu_transfer_data_size_options, false};
+
+//LINK BUDGET OPTIONS
+
+//TODO
+uint32_t link_budget_options = 101;
+
+menu_option_t menu_link_budget_options = {"101 dBm", test_func, NULL};
+
+menu_page_t menu_link_budget_page = {1, &menu_main_page, &menu_link_budget_options, false};
+
+//MAIN MENU OPTIONS
+
+menu_option_t main_options[11] = 
+{
+	{"Run single transfer", test_func, NULL},
+	{"Run cont. transfer", test_func, NULL},
+	{"BLE version", test_func, &menu_version_page},
+	{"Preferred PHY", test_func, &menu_phy_page},
+	{"Conn. interval", test_func, &menu_conn_int_page},
+	{"ATT MTU size", test_func, &menu_att_mtu_page},
+	{"Data length ext", test_func, &menu_dle_page},
+	{"Conn evt ext", test_func, &menu_conn_evt_ext_page},
+	{"Tx power", test_func, &menu_tx_power_page},
+	{"Transfer data size", test_func, &menu_transfer_data_size_page},
+	{"Link budget", test_func, &menu_link_budget_page},
+};
+
+menu_page_t menu_main_page = {11, NULL, main_options, true};
+
+menu_page_t *m_menu_current_page;
+
+void menu_print()
 {
 	static const uint16_t number_pos = 220;
 	static const uint16_t text_pos = 20;
-	static const uint8_t max_index = 9;
-	
-	bool begin_test = false;
-	uint8_t index = 0;
-	uint8_t line_counter;
+	static uint8_t max_lines = MAX_LINES - 2;
+
+	uint8_t max_index = m_menu_current_page->nr_of_options;
+	uint8_t opt_index = m_menu_current_page->index;
+	int8_t line_index;
 	uint8_t pointer_pos;
-	char str[50];
 	
-    while (!begin_test)
-    {
-		//start scrolling if index is larger than the max lines
-		if(index >= (MAX_LINES - 1))
+	while(1)
+	{
+		//start scrolling if opt_index is larger than the max lines
+		if(opt_index > (max_lines - 1))
 		{
-			line_counter = index - MAX_LINES - 1;
-			pointer_pos = MAX_LINES - 1;
+			line_index =  max_lines - 1 - opt_index;
+			pointer_pos = max_lines - 1;
 		}
 		else
 		{
-			line_counter = 0;
-			pointer_pos = index;
+			line_index = 0;
+			pointer_pos = opt_index;
 		}
 		
 		display_clear();
 
+		display_print_line("[Btn1: UP, Btn2: DOWN, Btn3: Sel, Btn4: Back]", 0, max_lines+1);
 		display_print_line("->", 0, pointer_pos);
 		
-        display_print_line("Run single transfer.", text_pos, line_counter++);
-		display_print_line("Run continuous transfer.", text_pos, line_counter++);
-		display_print_line("Adjust for bluetooth version.", text_pos, line_counter++);
-
-		sprintf(str, "%d bytes", m_test_params.att_mtu);
-		display_print_line(str, number_pos, line_counter);
-		display_print_line_inc("ATT MTU size:", text_pos, line_counter++);
-
-		sprintf(str, "%s\r\n", phy_str(m_test_params.rxtx_phy));
-		display_print_line(str, number_pos, line_counter);
-		display_print_line("Preferredy PHY:", text_pos, line_counter++);
-
-		sprintf(str, "%.2f ms", (float)m_test_params.conn_interval * 1.25);
-		display_print_line(str, number_pos, line_counter);
-		display_print_line("Conn. interval:");
-
-		sprintf(str, "%s", m_test_params.data_len_ext_enabled ?
-					 (uint32_t)"ON" :
-					 (uint32_t)"OFF");
-		display_print_line(str, number_pos, line_counter);
-		display_print_line("Data length ext. (DLE):", text_pos, line_counter++);
-
-		sprintf(str, "%s", m_test_params.conn_evt_len_ext_enabled ?
-					 (uint32_t)"ON" :
-					 (uint32_t)"OFF");
-		display_print_line(str, number_pos, line_counter);
-		display_print_line("Connection Event ext:", text_pos, line_counter++);
-
-		sprintf(str, "%d KB", m_transfer_data.kb_transfer_size);
-		display_print_line(str, number_pos, line_counter);
-		display_print_line("Transfer data size:", text_pos, line_counter++);
+		for(int8_t i = 0; i < max_index; i++)
+		{
+			if((i+line_index) <= max_lines)
+			{
+				display_print_line(m_menu_current_page->options[i].title, text_pos, i + line_index);
+				if(m_menu_current_page->show_values)
+				{
+					menu_page_t *next_page = m_menu_current_page->options[i].next;
+					if(next_page != NULL)
+					{
+						//TODO change the index here according to what is the parameter set
+						display_print_line(next_page->options[0].title, number_pos, i + line_index);
+					}
+				}
+			}
+		}
 		
 		display_show();
 		
-        switch (button_read())
-        {
-            case BUTTON_UP:
-                if(index < max_index)
-				{
-					index++;
-				}
-				else
-				{
-					index = 0;
-				}
-                break;
-
+		switch (button_read())
+		{
 			case BUTTON_DOWN:
-                if(index != 0)
+				if(opt_index < (max_index-1))
 				{
-					index--;
+					opt_index++;
+					if(pointer_pos < max_lines)
+					{
+						pointer_pos++;
+					}
 				}
-                break;
+				break;
+
+			case BUTTON_UP:
+				if(opt_index != 0)
+				{
+					opt_index--;
+				}
+				
+				if(pointer_pos != 0)
+				{
+					pointer_pos--;
+				}
+				break;
 			
-            case BUTTON_SEL:
-                
-                break;
+			case BUTTON_SEL:
+				m_menu_current_page->index = opt_index;
+			
+				if(m_menu_current_page->options[opt_index].callback != NULL)
+				{
+					m_menu_current_page->options[opt_index].callback(pointer_pos);
+				}
+				if(m_menu_current_page->options[opt_index].next != NULL)
+				{
+					m_menu_current_page = m_menu_current_page->options[opt_index].next;
+				}
+				return;
+				break;
 			
 			case BUTTON_BACK:
-                //no action for the main menu
-                break;
-        }
-    }
-
-	m_transfer_data.last_throughput = 0;
-	memset(&m_rssi_data, 0, sizeof(m_rssi_data));
-	m_rssi_data.max = -128;
-    m_print_menu = false;
+				if(m_menu_current_page->prev != NULL)
+				{
+					m_menu_current_page = m_menu_current_page->prev;
+					return;
+				}
+				break;
+		}
+	}
 }
 
 
@@ -1959,6 +1561,8 @@ static void display_timer_handler(void *p_context)
 
 int main(void)
 {
+	m_menu_current_page = &menu_main_page;
+	
     log_init();
 	
 	display_init();
