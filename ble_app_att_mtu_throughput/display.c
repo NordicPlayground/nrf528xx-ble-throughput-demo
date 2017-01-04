@@ -119,7 +119,7 @@ static const nrf_drv_spi_config_t m_spi_cfg =
     .ss_pin       = NRF_DRV_SPI_PIN_NOT_USED,
     .irq_priority = APP_IRQ_PRIORITY_HIGH,
     .orc          = 0xFF,
-    .frequency    = NRF_DRV_SPI_FREQ_1M,
+    .frequency    = NRF_DRV_SPI_FREQ_2M,
     .mode         = NRF_DRV_SPI_MODE_0,
     .bit_order    = NRF_DRV_SPI_BIT_ORDER_LSB_FIRST,
 };
@@ -306,7 +306,7 @@ void display_print_line(char * line, uint32_t x_pos, uint8_t line_nr)
 	fb_string_put(x_pos + TEXT_LEFT_MARGIN, line_nr * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
 }
 
-void display_draw_test_run_screen(transfer_data_t *transfer_data)
+void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data)
 {
 	if(!m_display_connected)
 	{
@@ -329,7 +329,6 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	
 	display_clear();
 	
-	display_print_line_inc("");
 	display_print_line_center_inc("Transferring data:");
 	
 	//print filled bar
@@ -350,12 +349,17 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	char str[50];
 	sprintf(str, "%dKB/%dKB transferred", transfer_data->bytes_transfered/1024, transfer_data->kb_transfer_size);
 	display_print_line_center_inc(str);
-	
-	//display_print_line("kbit/s", 150, line_counter);
+
 	sprintf(str, "Speed: %.1f Kbits/s", throughput);
 	display_print_line_center_inc(str);
 	
-	display_print_line_inc("");
+	sprintf(str, "Link budget: %d", rssi_data->link_budget);
+	//sprintf(str, "RSSI: %d", rssi_data->current_rssi);
+	display_print_line_center_inc(str);
+	
+	sprintf(str, "Range multiplier: %d", rssi_data->range_multiplier);
+	//sprintf(str, "RSSI average: %.f", rssi_data->moving_average);
+	display_print_line_center_inc(str);
 	
 	if(transfer_data->last_throughput > 0)
 	{
@@ -368,7 +372,7 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data)
 	display_show();
 }
 
-void display_test_done_screen(transfer_data_t *transfer_data)
+void display_test_done_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data)
 {
 	display_clear();
 	
@@ -390,6 +394,16 @@ void display_test_done_screen(transfer_data_t *transfer_data)
 	sprintf(str, "%.2f Kbits/s.", throughput);
 	display_print_line(str, number_x_pos, display_get_line_nr());
 	display_print_line_inc("Throughput:");
+	
+	if(rssi_data->sum != 0)
+	{
+		display_print_line_inc("");
+		
+		int8_t avg_rssi = (rssi_data->sum + (int32_t)rssi_data->nr_of_samples/2) / (int32_t)rssi_data->nr_of_samples;
+		sprintf(str, "%d dBm.", avg_rssi);
+		display_print_line(str, number_x_pos, display_get_line_nr());
+		display_print_line_inc("Average RSSI:");
+	}
 	
 	display_print_line_inc("");
 	display_print_line_inc("Press any button to exit.");

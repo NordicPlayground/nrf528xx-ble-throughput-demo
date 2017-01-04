@@ -11,7 +11,21 @@ typedef struct
     bool     data_len_ext_enabled;      /**< Data length extension status. */
     bool     conn_evt_len_ext_enabled;  /**< Connection event length extension status. */
 	uint8_t  rxtx_phy;
+	int8_t 	 tx_power;
+	uint8_t  link_budget;
 } test_params_t;
+
+typedef struct
+{
+	int8_t		current_rssi;
+	int32_t 	sum;
+	int8_t 		min;
+	int8_t 		max;
+	uint32_t 	nr_of_samples;
+	uint8_t 	link_budget;
+	uint32_t 	range_multiplier;
+	float 		moving_average;
+} rssi_data_t;
 
 typedef struct
 {
@@ -26,8 +40,8 @@ void display_test(void);
 
 void display_draw_nordic_logo(void);
 
-void display_draw_test_run_screen(transfer_data_t *transfer_data);
-void display_test_done_screen(transfer_data_t *transfer_data);
+void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data);
+void display_test_done_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data);
 
 void display_print_line_inc(char * line);
 void display_print_line_center_inc(char * line);
