@@ -81,7 +81,7 @@
 #define SENSITIVITY_1MBPS	      (-96)
 #define SENSITIVITY_2MBPS	      (-93)
 
-#define RSSI_MOVING_AVERAGE_ALPHA	0.5		//higher value will lower the frequency of the filter
+#define RSSI_MOVING_AVERAGE_ALPHA	0.90	//higher value will lower the frequency of the filter
 
 #define DISPLAY_TIMER_UPDATE_INTERVAL	APP_TIMER_TICKS(200, TIMER_PRESCALER)
 APP_TIMER_DEF(m_display_timer_id);
@@ -1800,6 +1800,7 @@ void menu_print(void)
 	m_transfer_data.last_throughput = 0;
 	memset(&m_rssi_data, 0, sizeof(m_rssi_data));
 	m_rssi_data.max = -128;
+    m_rssi_data.range_multiplier_max = 500;
     m_print_menu = false;
 }
 
@@ -1853,8 +1854,13 @@ static void display_timer_handler(void *p_context)
 		{
 			m_rssi_data.link_budget = m_test_params.link_budget - m_test_params.tx_power + m_rssi_data.moving_average;
 		}
+        
+		if(m_rssi_data.link_budget > m_rssi_data.link_budget_max)
+        {
+            m_rssi_data.link_budget_max = m_rssi_data.link_budget;
+        }
 		
-		m_rssi_data.range_multiplier = pow(10.0, (double)m_rssi_data.link_budget/20.0);
+        m_rssi_data.range_multiplier = pow(10.0, (double)m_rssi_data.link_budget/20.0);
 	}
 }
 

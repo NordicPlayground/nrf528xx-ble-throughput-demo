@@ -357,9 +357,17 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *r
 	//sprintf(str, "RSSI: %d", rssi_data->current_rssi);
 	display_print_line_center_inc(str);
 	
-	sprintf(str, "Range multiplier: %d", rssi_data->range_multiplier);
-	//sprintf(str, "RSSI average: %.f", rssi_data->moving_average);
-	display_print_line_center_inc(str);
+    if(rssi_data->range_multiplier <= rssi_data->range_multiplier_max)
+    {
+        sprintf(str, "Range multiplier: %d", rssi_data->range_multiplier);
+    }
+    else
+    {
+        sprintf(str, "Range multiplier: %d+", rssi_data->range_multiplier_max);
+    }
+
+    //sprintf(str, "RSSI average: %.f", rssi_data->moving_average);
+    display_print_line_center_inc(str);
 	
 	if(transfer_data->last_throughput > 0)
 	{

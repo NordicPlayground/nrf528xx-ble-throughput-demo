@@ -23,7 +23,9 @@ typedef struct
 	int8_t 		max;
 	uint32_t 	nr_of_samples;
 	uint8_t 	link_budget;
+    uint8_t     link_budget_max;
 	uint32_t 	range_multiplier;
+    uint32_t    range_multiplier_max;
 	float 		moving_average;
 } rssi_data_t;
 
