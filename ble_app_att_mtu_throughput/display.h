@@ -10,12 +10,13 @@
 typedef struct
 {
     uint16_t att_mtu;                   /**< GATT ATT MTU, in bytes. */
-    uint16_t conn_interval;             /**< Connection interval expressed in units of 1.25 ms. */
+    float	 conn_interval;             /**< Connection interval in ms */
     bool     data_len_ext_enabled;      /**< Data length extension status. */
     bool     conn_evt_len_ext_enabled;  /**< Connection event length extension status. */
 	uint8_t  rxtx_phy;
 	int8_t 	 tx_power;
 	uint8_t  link_budget;
+	char *	 ble_version;
 } test_params_t;
 
 typedef struct

@@ -45,12 +45,14 @@
 #include "nrf_log_ctrl.h"
 
 #include "display.h"
+#include "menu.h"
 
 #define TIMER_PRESCALER         0                                   /**< Value of the RTC1 PRESCALER register. */
 #define TIMER_OP_QUEUE_SIZE     4                                   /**< Size of timer operation queues. */
 
 #define ATT_MTU_DEFAULT         247                                 /**< Default ATT MTU size, in bytes. */
-#define CONN_INTERVAL_DEFAULT   MSEC_TO_UNITS(400, UNIT_1_25_MS)     /**< Default connection interval used at connection establishment by central side. */
+#define CONN_INTERVAL_DEFAULT_MS 400.0
+#define CONN_INTERVAL_DEFAULT   MSEC_TO_UNITS(CONN_INTERVAL_DEFAULT_MS, UNIT_1_25_MS)     /**< Default connection interval used at connection establishment by central side. */
 
 #define CONN_INTERVAL_MIN       MSEC_TO_UNITS(7.5, UNIT_1_25_MS)    /**< Minimum acceptable connection interval, in 1.25 ms units. */
 #define CONN_INTERVAL_MAX       MSEC_TO_UNITS(500, UNIT_1_25_MS)    /**< Maximum acceptable connection interval, in 1.25 ms units. */
@@ -66,11 +68,6 @@
 #define LED_PROGRESS              BSP_BOARD_LED_2
 //#define LED_FINISHED              BSP_BOARD_LED_3
 
-#define BUTTON_UP				  BUTTON_1
-#define BUTTON_DOWN				  BUTTON_3
-#define BUTTON_SEL				  BUTTON_2
-#define BUTTON_BACK				  BUTTON_4
-
 
 #define BUTTON_DETECTION_DELAY    APP_TIMER_TICKS(50, TIMER_PRESCALER)       /**< Delay from a GPIOTE event until a button is reported as pushed (in number of timer ticks). */
 
@@ -80,7 +77,7 @@
 #define SENSITIVITY_1MBPS	      (-96)
 #define SENSITIVITY_2MBPS	      (-93)
 
-#define RSSI_MOVING_AVERAGE_ALPHA	0.5		//higher value will lower the frequency of the filter
+#define RSSI_MOVING_AVERAGE_ALPHA	0.5f		//higher value will lower the frequency of the filter
 
 #define DISPLAY_TIMER_UPDATE_INTERVAL	APP_TIMER_TICKS(200, TIMER_PRESCALER)
 APP_TIMER_DEF(m_display_timer_id);
@@ -144,7 +141,7 @@ static const char m_target_periph_name[] = DEVICE_NAME;
 static test_params_t m_test_params =
 {
     .att_mtu                  = ATT_MTU_DEFAULT,
-    .conn_interval            = CONN_INTERVAL_DEFAULT,
+    .conn_interval            = CONN_INTERVAL_DEFAULT_MS,
     .data_len_ext_enabled     = true,
     .conn_evt_len_ext_enabled = true,
 	.rxtx_phy                 = BLE_GAP_PHY_2MBPS,
@@ -174,41 +171,34 @@ static ble_gap_conn_params_t m_conn_param =
 static const test_params_t ble_5_HS_version_params =
 {
     .att_mtu                  = 247,
-    .conn_interval            = MSEC_TO_UNITS(400, UNIT_1_25_MS),
+    .conn_interval            = 400.0f,
     .data_len_ext_enabled     = true,
     .conn_evt_len_ext_enabled = true,
 	.rxtx_phy                 = BLE_GAP_PHY_2MBPS,
 	.tx_power				  = 8,	
+	.ble_version			  = "BLE 5.0 HS",
 };
 
 static const test_params_t ble_5_LR_version_params =
 {
     .att_mtu                  = 23,
-    .conn_interval            = MSEC_TO_UNITS(7.5, UNIT_1_25_MS),
+    .conn_interval            = 7.5f,
     .data_len_ext_enabled     = false,
     .conn_evt_len_ext_enabled = false,
 	.rxtx_phy                 = BLE_GAP_PHY_CODED,
 	.tx_power				  = 8,
+	.ble_version			  = "BLE 5.0 LR",
 };
 
 static const test_params_t ble_4_2_version_params =
 {
     .att_mtu                  = 247,
-    .conn_interval            = MSEC_TO_UNITS(400, UNIT_1_25_MS),
+    .conn_interval            = 400.0f,
     .data_len_ext_enabled     = true,
     .conn_evt_len_ext_enabled = true,
 	.rxtx_phy                 = BLE_GAP_PHY_1MBPS,
 	.tx_power				  = 4,
-};
-
-static const test_params_t ble_4_1_version_params =
-{
-    .att_mtu                  = 23,
-    .conn_interval            = MSEC_TO_UNITS(7.5, UNIT_1_25_MS),
-    .data_len_ext_enabled     = false,
-    .conn_evt_len_ext_enabled = false,
-	.rxtx_phy                 = BLE_GAP_PHY_1MBPS,
-	.tx_power				  = 4,
+	.ble_version			  = "BLE 4.2",
 };
 
 void advertising_start(void);
@@ -356,8 +346,8 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
                 if (m_gap_role == BLE_GAP_ROLE_PERIPH)
                 {
                     m_conn_interval_configured = false;
-                    m_conn_param.min_conn_interval = m_test_params.conn_interval;
-                    m_conn_param.max_conn_interval = m_test_params.conn_interval+1;
+                    m_conn_param.min_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS);
+                    m_conn_param.max_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS) + 1;
                     err_code = ble_conn_params_change_conn_params(&m_conn_param);
                     if (err_code != NRF_SUCCESS)
                     {
@@ -367,8 +357,8 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
                 if (m_gap_role == BLE_GAP_ROLE_CENTRAL)
                 {
                     m_conn_interval_configured     = true;
-                    m_conn_param.min_conn_interval = m_test_params.conn_interval;
-                    m_conn_param.max_conn_interval = m_test_params.conn_interval;
+                    m_conn_param.min_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS);
+                    m_conn_param.max_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS);
                     err_code = sd_ble_gap_conn_param_update(m_conn_handle,
                                                                        &m_conn_param);
                     if (err_code != NRF_SUCCESS)
@@ -1251,260 +1241,6 @@ void test_begin(void)
     }
 }
 
-typedef void (*handler_t)(uint32_t option_index);
-
-typedef struct
-{
-	char *title;
-	handler_t callback;
-	void *next;
-} menu_option_t;
-
-typedef struct
-{
-	uint8_t nr_of_options;
-	void *prev;
-	menu_option_t *options;
-	bool show_values;
-	uint8_t index;
-} menu_page_t;
-
-void test_func(uint32_t option_index)
-{
-	
-}
-
-menu_page_t menu_main_page;
-
-//BLE VERSION OPTIONS
-
-menu_option_t menu_version_options[4] = 
-{
-	{"BLE 5 HS", test_func, &menu_main_page},
-	{"BLE 5 LR", test_func, &menu_main_page},
-	{"BLE 4.2", test_func, &menu_main_page},
-	{"BLE 4.1", test_func, &menu_main_page},
-};
-
-menu_page_t menu_version_page = {4, &menu_main_page, menu_version_options, false};
-
-//PHY OPTIONS
-
-menu_option_t menu_phy_options[3] = 
-{
-	{"2 Mbps (High Speed)", test_func, &menu_main_page},
-	{"1 Mbps", test_func, &menu_main_page},
-	{"125 Kbps (long range)", test_func, &menu_main_page},
-};
-
-menu_page_t menu_phy_page = {3, &menu_main_page, menu_phy_options, false};
-
-//CONNECTION INTERVAL OPTIONS
-
-float conn_int_options[3] = {7.5, 50, 400};
-
-menu_option_t menu_conn_int_options[3] = 
-{
-	{"7.5 ms", test_func, &menu_main_page},
-	{"50 ms", test_func, &menu_main_page},
-	{"400 ms", test_func, &menu_main_page},
-};
-
-menu_page_t menu_conn_int_page = {3, &menu_main_page, menu_conn_int_options, false};
-
-//ATT MTU SIZE OPTIONS
-
-uint32_t att_mtu_options[3] = {23, 158, 247};
-
-menu_option_t menu_att_mtu_options[3] = 
-{
-	{"23 bytes", test_func, &menu_main_page},
-	{"158 bytes", test_func, &menu_main_page},
-	{"247 bytes", test_func, &menu_main_page},
-};
-
-menu_page_t menu_att_mtu_page = {3, &menu_main_page, menu_att_mtu_options, false};
-
-//DATA LENGTH EXTENSION OPTIONS
-
-bool dle_option;
-
-menu_option_t menu_dle_options[2] = 
-{
-	{"ON", test_func, &menu_main_page},
-	{"OFF", test_func, &menu_main_page},
-};
-
-menu_page_t menu_dle_page = {2, &menu_main_page, menu_dle_options, false};
-
-//CONNECTION EVENT LENGTH EXTENSION OPTIONS
-
-bool conn_evt_ext_option;
-
-menu_option_t menu_conn_evt_ext_options[2] = 
-{
-	{"ON", test_func, &menu_main_page},
-	{"OFF", test_func, &menu_main_page},
-};
-
-menu_page_t menu_conn_evt_ext_page = {2, &menu_main_page, menu_conn_evt_ext_options, false};
-
-//TX POWER OPTIONS
-
-uint32_t tx_power_options[3] = {0, 4, 8};
-
-menu_option_t menu_tx_power_options[3] = 
-{
-	{"0 dBm", test_func, &menu_main_page},
-	{"4 dBm", test_func, &menu_main_page},
-	{"8 dBm", test_func, &menu_main_page},
-};
-
-menu_page_t menu_tx_power_page = {3, &menu_main_page, menu_tx_power_options, false};
-
-//TRANSFER DATA SIZE OPTIONS
-
-uint32_t transfer_data_size_options[3] = {100, 500, 1024};
-
-menu_option_t menu_transfer_data_size_options[3] = 
-{
-	{"100 KB", test_func, &menu_main_page},
-	{"500 KB", test_func, &menu_main_page},
-	{"1 MB", test_func, &menu_main_page},
-};
-
-menu_page_t menu_transfer_data_size_page = {3, &menu_main_page, menu_transfer_data_size_options, false};
-
-//LINK BUDGET OPTIONS
-
-//TODO
-uint32_t link_budget_options = 101;
-
-menu_option_t menu_link_budget_options = {"101 dBm", test_func, NULL};
-
-menu_page_t menu_link_budget_page = {1, &menu_main_page, &menu_link_budget_options, false};
-
-//MAIN MENU OPTIONS
-
-menu_option_t main_options[11] = 
-{
-	{"Run single transfer", test_func, NULL},
-	{"Run cont. transfer", test_func, NULL},
-	{"BLE version", test_func, &menu_version_page},
-	{"Preferred PHY", test_func, &menu_phy_page},
-	{"Conn. interval", test_func, &menu_conn_int_page},
-	{"ATT MTU size", test_func, &menu_att_mtu_page},
-	{"Data length ext", test_func, &menu_dle_page},
-	{"Conn evt ext", test_func, &menu_conn_evt_ext_page},
-	{"Tx power", test_func, &menu_tx_power_page},
-	{"Transfer data size", test_func, &menu_transfer_data_size_page},
-	{"Link budget", test_func, &menu_link_budget_page},
-};
-
-menu_page_t menu_main_page = {11, NULL, main_options, true};
-
-menu_page_t *m_menu_current_page;
-
-void menu_print()
-{
-	static const uint16_t number_pos = 220;
-	static const uint16_t text_pos = 20;
-	static uint8_t max_lines = MAX_LINES - 2;
-
-	uint8_t max_index = m_menu_current_page->nr_of_options;
-	uint8_t opt_index = m_menu_current_page->index;
-	int8_t line_index;
-	uint8_t pointer_pos;
-	
-	while(1)
-	{
-		//start scrolling if opt_index is larger than the max lines
-		if(opt_index > (max_lines - 1))
-		{
-			line_index =  max_lines - 1 - opt_index;
-			pointer_pos = max_lines - 1;
-		}
-		else
-		{
-			line_index = 0;
-			pointer_pos = opt_index;
-		}
-		
-		display_clear();
-
-		display_print_line("[Btn1: UP, Btn2: DOWN, Btn3: Sel, Btn4: Back]", 0, max_lines+1);
-		display_print_line("->", 0, pointer_pos);
-		
-		for(int8_t i = 0; i < max_index; i++)
-		{
-			if((i+line_index) <= max_lines)
-			{
-				display_print_line(m_menu_current_page->options[i].title, text_pos, i + line_index);
-				if(m_menu_current_page->show_values)
-				{
-					menu_page_t *next_page = m_menu_current_page->options[i].next;
-					if(next_page != NULL)
-					{
-						//TODO change the index here according to what is the parameter set
-						display_print_line(next_page->options[0].title, number_pos, i + line_index);
-					}
-				}
-			}
-		}
-		
-		display_show();
-		
-		switch (button_read())
-		{
-			case BUTTON_DOWN:
-				if(opt_index < (max_index-1))
-				{
-					opt_index++;
-					if(pointer_pos < max_lines)
-					{
-						pointer_pos++;
-					}
-				}
-				break;
-
-			case BUTTON_UP:
-				if(opt_index != 0)
-				{
-					opt_index--;
-				}
-				
-				if(pointer_pos != 0)
-				{
-					pointer_pos--;
-				}
-				break;
-			
-			case BUTTON_SEL:
-				m_menu_current_page->index = opt_index;
-			
-				if(m_menu_current_page->options[opt_index].callback != NULL)
-				{
-					m_menu_current_page->options[opt_index].callback(pointer_pos);
-				}
-				if(m_menu_current_page->options[opt_index].next != NULL)
-				{
-					m_menu_current_page = m_menu_current_page->options[opt_index].next;
-				}
-				return;
-				break;
-			
-			case BUTTON_BACK:
-				if(m_menu_current_page->prev != NULL)
-				{
-					m_menu_current_page = m_menu_current_page->prev;
-					return;
-				}
-				break;
-		}
-	}
-}
-
-
 static bool is_test_ready()
 {
     if (   (m_board_role == BOARD_TESTER)
@@ -1539,7 +1275,7 @@ static void display_timer_handler(void *p_context)
 		{
 			m_rssi_data.moving_average = 
 					(float)m_rssi_data.moving_average * RSSI_MOVING_AVERAGE_ALPHA
-					+ (float)rssi * (1.0 - RSSI_MOVING_AVERAGE_ALPHA);
+					+ (float)rssi * (1.0f - RSSI_MOVING_AVERAGE_ALPHA);
 		}
 		
 		m_rssi_data.sum += rssi;
@@ -1559,13 +1295,53 @@ static void display_timer_handler(void *p_context)
 	}
 }
 
+void print_variable(void *var, uint32_t type)
+{
+	//display_clear();
+
+	char str[50];
+	
+	if(type == 0)
+	{
+		sprintf(str, "%d", *(int8_t*)var);
+	}
+	if(type == 1)
+	{
+		sprintf(str, "%s", (char*)var);
+	}
+	if(type == 2)
+	{
+		sprintf(str, "%.2f", *(float*)var);
+	}
+	
+	display_print_line_inc(str);
+	
+	display_show();
+}
+
 int main(void)
 {
-	m_menu_current_page = &menu_main_page;
 	
     log_init();
 	
 	display_init();
+	/*
+	display_clear();
+	int8_t test = -13;
+	float test_f = 3.14159f;
+	char *test_text[2] = {"Hello", "world"};
+	
+	void *var_array;
+	var_array = test_text;
+	char **tt = var_array;
+	
+	display_print_line_inc(tt[0]);
+	display_print_line_inc(tt[1]);
+	
+	display_show();
+	//print_variable(tt, 1);
+	
+	while(1);*/
 	
     leds_init();
     timer_init();
