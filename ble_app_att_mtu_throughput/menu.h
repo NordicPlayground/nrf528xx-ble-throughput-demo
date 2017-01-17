@@ -9,6 +9,7 @@
 #define BUTTON_SEL				  BUTTON_2
 #define BUTTON_BACK				  BUTTON_4
 
+uint32_t phy_str(uint8_t phy);
 uint8_t button_read(void);
 void menu_print(void);
 

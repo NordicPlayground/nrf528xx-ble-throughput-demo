@@ -9,13 +9,14 @@
 
 typedef struct
 {
-    uint16_t att_mtu;                   /**< GATT ATT MTU, in bytes. */
-    float	 conn_interval;             /**< Connection interval in ms */
-    bool     data_len_ext_enabled;      /**< Data length extension status. */
-    bool     conn_evt_len_ext_enabled;  /**< Connection event length extension status. */
-	uint8_t  rxtx_phy;
-	int8_t 	 tx_power;
-	uint8_t  link_budget;
+    uint16_t att_mtu;                   // GATT ATT MTU, in bytes. 
+    float	 conn_interval;             // Connection interval in ms 
+    bool     data_len_ext_enabled;      // Data length extension status. 
+    bool     conn_evt_len_ext_enabled;  // Connection event length extension status. 
+	uint8_t  rxtx_phy;					//PHY used (125Kbps, 1Mbps or 2Mbps)
+	int8_t 	 tx_power;					//output power
+	uint8_t  link_budget;				//link budget (output power minus sensitivity)
+	uint16_t transfer_data_size;		//transfer data size in kB
 	char *	 ble_version;
 } test_params_t;
 

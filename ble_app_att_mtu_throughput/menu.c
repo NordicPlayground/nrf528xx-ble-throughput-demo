@@ -13,6 +13,7 @@ typedef enum
 	UINT16_T,
 	FLOAT,
 	STRING,
+	PHY_T,
 } type_t;
 
 typedef void (*handler_t)(uint32_t option_index);
@@ -33,17 +34,255 @@ typedef struct
 
 static test_params_t m_test_params =
 {
-    .att_mtu                  = 247,
-    .conn_interval            = 400.0f,
-    .data_len_ext_enabled     = true,
-    .conn_evt_len_ext_enabled = true,
-	.rxtx_phy                 = BLE_GAP_PHY_2MBPS,
-	.tx_power				  = 8,
+    .att_mtu                  	= 247,
+    .conn_interval            	= 400.0f,
+    .data_len_ext_enabled     	= true,
+    .conn_evt_len_ext_enabled	= true,
+	.rxtx_phy                 	= BLE_GAP_PHY_2MBPS,
+	.tx_power				  	= 8,
+	.ble_version			  	= "BLE 5.0 HS",
+	.transfer_data_size			= 1024,
+	.link_budget				= 100,
+};
+
+static const test_params_t ble_5_HS_version_params =
+{
+    .att_mtu                  	= 247,
+    .conn_interval            	= 400.0f,
+    .data_len_ext_enabled     	= true,
+    .conn_evt_len_ext_enabled 	= true,
+	.rxtx_phy                 	= BLE_GAP_PHY_2MBPS,
+	.tx_power				  	= 8,	
+	.ble_version			  	= "BLE 5.0 HS",
+	.transfer_data_size			= 1024,
+	.link_budget				= 100,
+};
+
+static const test_params_t ble_5_LR_version_params =
+{
+    .att_mtu                  	= 23,
+    .conn_interval            	= 7.5f,
+    .data_len_ext_enabled     	= false,
+    .conn_evt_len_ext_enabled 	= false,
+	.rxtx_phy                 	= BLE_GAP_PHY_CODED,
+	.tx_power				  	= 8,
+	.ble_version			  	= "BLE 5.0 LR",
+	.transfer_data_size			= 100,
+	.link_budget				= 111,
+};
+
+static const test_params_t ble_4_2_version_params =
+{
+    .att_mtu                  	= 247,
+    .conn_interval            	= 400.0f,
+    .data_len_ext_enabled     	= true,
+    .conn_evt_len_ext_enabled 	= true,
+	.rxtx_phy                 	= BLE_GAP_PHY_1MBPS,
+	.tx_power				  	= 4,
+	.ble_version			  	= "BLE 4.2",
+	.transfer_data_size			= 1024,
+	.link_budget				= 100,
+};
+
+static const test_params_t ble_4_1_version_params =
+{
+    .att_mtu                  	= 23,
+    .conn_interval            	= 7.5f,
+    .data_len_ext_enabled     	= false,
+    .conn_evt_len_ext_enabled 	= false,
+	.rxtx_phy                 	= BLE_GAP_PHY_1MBPS,
+	.tx_power				  	= 4,
+	.ble_version			  	= "BLE 4.1",
+	.transfer_data_size			= 100,
+	.link_budget				= 100,
 };
 
 menu_page_t menu_main_page;
 
-//TX POWER OPTIONS
+//BLE VERSION
+
+#define BLE_VERSION_OPTIONS_SIZE 4
+
+char *ble_version_options[BLE_VERSION_OPTIONS_SIZE] = {"BLE 5 HS", "BLE 5 LR", "BLE 4.2", "BLE 4.1"};
+
+void menu_ble_version_func(uint32_t option_index)
+{
+	switch(option_index)
+	{
+		case 0:
+			memcpy(&m_test_params, &ble_5_HS_version_params, sizeof(test_params_t));
+			break;
+		case 1:
+			memcpy(&m_test_params, &ble_5_LR_version_params, sizeof(test_params_t));
+			break;
+		case 2:
+			memcpy(&m_test_params, &ble_4_2_version_params, sizeof(test_params_t));
+			break;
+		case 3:
+			memcpy(&m_test_params, &ble_4_1_version_params, sizeof(test_params_t));
+			break;
+	}
+	
+	//update params
+	//TODO
+}
+
+menu_page_t menu_ble_version_page = 
+{
+	.nr_of_options			= BLE_VERSION_OPTIONS_SIZE,
+	.prev 					= &menu_main_page,
+	.option_values			= ble_version_options,
+	.option_current_value	= &m_test_params.ble_version,
+	.option_type			= STRING,
+	.option_unit			= "",
+	.show_values			= false,
+	.index					= 0,
+	.callback				= menu_ble_version_func,
+	.next_pages				= NULL,
+};
+
+//PREFERRED PHY
+
+#define PHY_OPTIONS_SIZE 3
+
+uint8_t phy_options[PHY_OPTIONS_SIZE] = {BLE_GAP_PHY_2MBPS, BLE_GAP_PHY_1MBPS, BLE_GAP_PHY_CODED};
+
+void menu_phy_func(uint32_t option_index)
+{
+	m_test_params.rxtx_phy = phy_options[option_index];
+	
+	//update params
+	//TODO
+}
+
+menu_page_t menu_phy_page = 
+{
+	.nr_of_options			= PHY_OPTIONS_SIZE,
+	.prev 					= &menu_main_page,
+	.option_values			= phy_options,
+	.option_current_value	= &m_test_params.rxtx_phy,
+	.option_type			= PHY_T,
+	.option_unit			= "",
+	.show_values			= false,
+	.index					= 0,
+	.callback				= menu_phy_func,
+	.next_pages				= NULL,
+};
+
+//CONNECTION INTERVAL
+
+#define CONN_INT_OPTIONS_SIZE 3
+
+float conn_int_options[CONN_INT_OPTIONS_SIZE] = {7.5f, 50.0f, 400.0f};
+
+void menu_conn_int_func(uint32_t option_index)
+{
+	m_test_params.conn_interval = conn_int_options[option_index];
+	
+	//update params
+	//TODO
+}
+
+menu_page_t menu_conn_int_page = 
+{
+	.nr_of_options			= CONN_INT_OPTIONS_SIZE,
+	.prev 					= &menu_main_page,
+	.option_values			= conn_int_options,
+	.option_current_value	= &m_test_params.conn_interval,
+	.option_type			= FLOAT,
+	.option_unit			= "ms",
+	.show_values			= false,
+	.index					= 2,
+	.callback				= menu_conn_int_func,
+	.next_pages				= NULL,
+};
+
+//ATT MTU SIZE_MAX
+
+#define ATT_MTU_OPTIONS_SIZE 3
+
+uint16_t att_mtu_options[ATT_MTU_OPTIONS_SIZE] = {23, 158, 247};
+
+void menu_att_mtu_func(uint32_t option_index)
+{
+	m_test_params.att_mtu = att_mtu_options[option_index];
+	
+	//update params
+	//TODO
+}
+
+menu_page_t menu_att_mtu_page = 
+{
+	.nr_of_options			= ATT_MTU_OPTIONS_SIZE,
+	.prev 					= &menu_main_page,
+	.option_values			= att_mtu_options,
+	.option_current_value	= &m_test_params.att_mtu,
+	.option_type			= UINT16_T,
+	.option_unit			= "bytes",
+	.show_values			= false,
+	.index					= 2,
+	.callback				= menu_att_mtu_func,
+	.next_pages				= NULL,
+};
+
+
+//DATA LENGTH EXTENSION
+
+#define DATA_LENGTH_EXT_OPTIONS_SIZE 2
+
+bool data_length_ext_options[DATA_LENGTH_EXT_OPTIONS_SIZE] = {true, false};
+
+void menu_data_length_ext_func(uint32_t option_index)
+{
+	m_test_params.data_len_ext_enabled = data_length_ext_options[option_index];
+	
+	//update params
+	//TODO
+}
+
+menu_page_t menu_data_length_ext_page = 
+{
+	.nr_of_options			= DATA_LENGTH_EXT_OPTIONS_SIZE,
+	.prev 					= &menu_main_page,
+	.option_values			= data_length_ext_options,
+	.option_current_value	= &m_test_params.data_len_ext_enabled,
+	.option_type			= BOOL,
+	.option_unit			= "",
+	.show_values			= false,
+	.index					= 0,
+	.callback				= menu_data_length_ext_func,
+	.next_pages				= NULL,
+};
+
+//CONNECTION EVENT LENGHT EXTENSION
+
+#define CONN_EVT_LENGTH_EXT_OPTIONS_SIZE 2
+
+bool conn_evt_length_ext_options[CONN_EVT_LENGTH_EXT_OPTIONS_SIZE] = {true, false};
+
+void menu_conn_evt_length_ext_func(uint32_t option_index)
+{
+	m_test_params.conn_evt_len_ext_enabled = conn_evt_length_ext_options[option_index];
+	
+	//update params
+	//TODO
+}
+
+menu_page_t menu_conn_evt_length_ext_page = 
+{
+	.nr_of_options			= CONN_EVT_LENGTH_EXT_OPTIONS_SIZE,
+	.prev 					= &menu_main_page,
+	.option_values			= conn_evt_length_ext_options,
+	.option_current_value	= &m_test_params.conn_evt_len_ext_enabled,
+	.option_type			= BOOL,
+	.option_unit			= "",
+	.show_values			= false,
+	.index					= 0,
+	.callback				= menu_conn_evt_length_ext_func,
+	.next_pages				= NULL,
+};
+
+//TX POWER
 
 #define TX_POWER_OPTIONS_SIZE 3
 
@@ -71,6 +310,43 @@ menu_page_t menu_tx_power_page =
 	.next_pages				= NULL,
 };
 
+//TRANSFER DATA SIZE
+
+#define TRANSFER_DATA_SIZE_OPTIONS_SIZE 3
+
+uint16_t transfer_data_size_options[TRANSFER_DATA_SIZE_OPTIONS_SIZE] = {1024, 512, 100};
+
+void menu_transfer_data_size_func(uint32_t option_index)
+{
+	m_test_params.transfer_data_size = transfer_data_size_options[option_index];
+	
+	//update params
+	//TODO
+}
+
+menu_page_t menu_transfer_data_size_page = 
+{
+	.nr_of_options			= TRANSFER_DATA_SIZE_OPTIONS_SIZE,
+	.prev 					= &menu_main_page,
+	.option_values			= transfer_data_size_options,
+	.option_current_value	= &m_test_params.transfer_data_size,
+	.option_type			= UINT16_T,
+	.option_unit			= "Kbytes",
+	.show_values			= false,
+	.index					= 0,
+	.callback				= menu_transfer_data_size_func,
+	.next_pages				= NULL,
+};
+
+//LINK BUDGET
+
+menu_page_t menu_link_budget_page = 
+{
+	.option_current_value	= &m_test_params.link_budget,
+	.option_type			= UINT8_T,
+	.option_unit			= "dBm",
+};
+
 //MAIN PAGE
 
 #define MAIN_OPTIONS_SIZE 11
@@ -94,15 +370,15 @@ menu_page_t *main_next_pages[MAIN_OPTIONS_SIZE] =
 {
 	NULL,
 	NULL,
+	&menu_ble_version_page,
+	&menu_phy_page,
+	&menu_conn_int_page,
+	&menu_att_mtu_page,
+	&menu_data_length_ext_page,
+	&menu_conn_evt_length_ext_page,
 	&menu_tx_power_page,
-	&menu_tx_power_page,
-	&menu_tx_power_page,
-	&menu_tx_power_page,
-	&menu_tx_power_page,
-	&menu_tx_power_page,
-	&menu_tx_power_page,
-	&menu_tx_power_page,
-	&menu_tx_power_page,
+	&menu_transfer_data_size_page,
+	&menu_link_budget_page,
 };
 
 menu_page_t menu_main_page = 
@@ -162,6 +438,10 @@ void print_var(void *array, uint8_t index, type_t type, char *unit, uint32_t x_p
 		case STRING:
 			var_array_s = array;
 			sprintf(str, "%s %s", var_array_s[index], unit);
+			break;
+		case PHY_T:
+			var_array_u8 = array;
+			sprintf(str, "%s", (char*)phy_str(var_array_u8[index]));
 			break;
 	}
 	
@@ -273,7 +553,11 @@ void menu_print()
 					menu_page_t *next_page = next_pages[opt_index];
 					if(next_page != NULL)
 					{
-						m_menu_current_page = next_page;
+						//Do not change page if next page does not have options
+						if(next_page->option_values != NULL)
+						{
+							m_menu_current_page = next_page;
+						}
 					}
 				}
 				else if(m_menu_current_page->prev != NULL)

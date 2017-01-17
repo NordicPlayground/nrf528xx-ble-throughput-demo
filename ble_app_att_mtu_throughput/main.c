@@ -1295,53 +1295,12 @@ static void display_timer_handler(void *p_context)
 	}
 }
 
-void print_variable(void *var, uint32_t type)
-{
-	//display_clear();
-
-	char str[50];
-	
-	if(type == 0)
-	{
-		sprintf(str, "%d", *(int8_t*)var);
-	}
-	if(type == 1)
-	{
-		sprintf(str, "%s", (char*)var);
-	}
-	if(type == 2)
-	{
-		sprintf(str, "%.2f", *(float*)var);
-	}
-	
-	display_print_line_inc(str);
-	
-	display_show();
-}
-
 int main(void)
 {
 	
     log_init();
 	
 	display_init();
-	/*
-	display_clear();
-	int8_t test = -13;
-	float test_f = 3.14159f;
-	char *test_text[2] = {"Hello", "world"};
-	
-	void *var_array;
-	var_array = test_text;
-	char **tt = var_array;
-	
-	display_print_line_inc(tt[0]);
-	display_print_line_inc(tt[1]);
-	
-	display_show();
-	//print_variable(tt, 1);
-	
-	while(1);*/
 	
     leds_init();
     timer_init();
