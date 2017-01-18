@@ -168,39 +168,6 @@ static ble_gap_conn_params_t m_conn_param =
     .conn_sup_timeout  = (uint16_t)CONN_SUP_TIMEOUT     // Supervisory timeout.
 };
 
-static const test_params_t ble_5_HS_version_params =
-{
-    .att_mtu                  = 247,
-    .conn_interval            = 400.0f,
-    .data_len_ext_enabled     = true,
-    .conn_evt_len_ext_enabled = true,
-	.rxtx_phy                 = BLE_GAP_PHY_2MBPS,
-	.tx_power				  = 8,	
-	.ble_version			  = "BLE 5.0 HS",
-};
-
-static const test_params_t ble_5_LR_version_params =
-{
-    .att_mtu                  = 23,
-    .conn_interval            = 7.5f,
-    .data_len_ext_enabled     = false,
-    .conn_evt_len_ext_enabled = false,
-	.rxtx_phy                 = BLE_GAP_PHY_CODED,
-	.tx_power				  = 8,
-	.ble_version			  = "BLE 5.0 LR",
-};
-
-static const test_params_t ble_4_2_version_params =
-{
-    .att_mtu                  = 247,
-    .conn_interval            = 400.0f,
-    .data_len_ext_enabled     = true,
-    .conn_evt_len_ext_enabled = true,
-	.rxtx_phy                 = BLE_GAP_PHY_1MBPS,
-	.tx_power				  = 4,
-	.ble_version			  = "BLE 4.2",
-};
-
 void advertising_start(void);
 void scan_start(void);
 void test_params_print(void);
@@ -343,29 +310,16 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
             m_notif_enabled = true;
             if (m_board_role == BOARD_TESTER)
             {
-                if (m_gap_role == BLE_GAP_ROLE_PERIPH)
-                {
-                    m_conn_interval_configured = false;
-                    m_conn_param.min_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS);
-                    m_conn_param.max_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS) + 1;
-                    err_code = ble_conn_params_change_conn_params(&m_conn_param);
-                    if (err_code != NRF_SUCCESS)
-                    {
-                        NRF_LOG_ERROR("sd_ble_gap_conn_param_update returned 0x%x.\r\n", err_code);
-                    }
-                }
-                if (m_gap_role == BLE_GAP_ROLE_CENTRAL)
-                {
-                    m_conn_interval_configured     = true;
-                    m_conn_param.min_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS);
-                    m_conn_param.max_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS);
-                    err_code = sd_ble_gap_conn_param_update(m_conn_handle,
-                                                                       &m_conn_param);
-                    if (err_code != NRF_SUCCESS)
-                    {
-                        NRF_LOG_ERROR("sd_ble_gap_conn_param_update returned 0x%x.\r\n", err_code);
-                    }
-                }
+				m_conn_interval_configured     = true;
+				//m_conn_param.min_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS);
+				//m_conn_param.max_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS);
+				err_code = sd_ble_gap_conn_param_update(m_conn_handle,
+																   &m_conn_param);
+				if (err_code != NRF_SUCCESS)
+				{
+					NRF_LOG_ERROR("sd_ble_gap_conn_param_update returned 0x%x.\r\n", err_code);
+				}
+
             }
         } break;
 
@@ -661,11 +615,14 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
 	
 	if(m_board_role == BOARD_TESTER)
 	{
+		test_params_t test_params;
+		get_test_params(&test_params);
+		
 		// Request PHY.
 		ble_gap_phys_t phys =
 		{
-			.tx_phys = m_test_params.rxtx_phy,
-			.rx_phys = m_test_params.rxtx_phy,
+			.tx_phys = test_params.rxtx_phy,
+			.rx_phys = test_params.rxtx_phy,
 		};
 
 		err_code = sd_ble_gap_phy_request(p_gap_evt->conn_handle, &phys);
@@ -1161,13 +1118,13 @@ void conn_evt_len_ext_set(bool status)
 }
 
 
-void data_len_ext_set(bool status)
+void data_len_ext_set(test_params_t *params)
 {
     ret_code_t err_code;
     ble_opt_t  opt;
 
-	uint16_t pdu_size = status ?
-        (m_test_params.att_mtu + LL_HEADER_LEN) : BLE_GATT_MTU_SIZE_DEFAULT + LL_HEADER_LEN;
+	uint16_t pdu_size = params->data_len_ext_enabled ?
+        (params->att_mtu + LL_HEADER_LEN) : BLE_GATT_MTU_SIZE_DEFAULT + LL_HEADER_LEN;
 	
 	if(pdu_size > 251)
 	{
@@ -1214,18 +1171,58 @@ void tx_power_set(int8_t tx_power)
 	update_link_budget();
 }
 
-void set_all_parameters()
-{
-	gatt_mtu_set(m_test_params.att_mtu);
-    data_len_ext_set(m_test_params.data_len_ext_enabled);
-    conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
-    preferred_phy_set(m_test_params.rxtx_phy);
-	tx_power_set(m_test_params.tx_power);
+void set_all_parameters(test_params_t *params)
+{	
+	gatt_mtu_set(params->att_mtu);
+	
+	m_conn_param.max_conn_interval = MSEC_TO_UNITS(params->conn_interval, UNIT_1_25_MS);
+	m_conn_param.min_conn_interval = MSEC_TO_UNITS(params->conn_interval, UNIT_1_25_MS);
+	
+    data_len_ext_set(params);
+    conn_evt_len_ext_set(params->conn_evt_len_ext_enabled);
+    preferred_phy_set(params->rxtx_phy);
+	tx_power_set(params->tx_power);
+	
+	amt_byte_transfer_count = params->transfer_data_size * 1024;
+	m_transfer_data.kb_transfer_size = params->transfer_data_size;
+	
+	//TODO: Choose BLE version better (tx power = 8 should be which version for example)
+	
+	switch(params->rxtx_phy)
+	{
+		case BLE_GAP_PHY_2MBPS:
+			params->link_budget = params->tx_power + 92;
+			params->ble_version = "BLE 5 HS";
+			break;
+		case BLE_GAP_PHY_1MBPS:
+			params->link_budget = params->tx_power + 96;
+			if(params->data_len_ext_enabled || params->conn_evt_len_ext_enabled || (params->att_mtu > 23))
+			{
+				params->ble_version = "BLE 4.2";
+			}
+			else
+			{
+				params->ble_version = "BLE 4.1";
+			}
+			break;
+		case BLE_GAP_PHY_CODED:
+			params->link_budget = params->tx_power + 103;
+			params->ble_version = "BLE 5 LR";
+			break;
+	}
 }
 
 
-void test_begin(void)
+void test_begin(bool continuous)
 {
+	m_test_continuous = continuous;
+	
+	m_transfer_data.last_throughput = 0;
+	memset(&m_rssi_data, 0, sizeof(m_rssi_data));
+	m_rssi_data.max = -128;
+    //m_rssi_data.range_multiplier_max = 500;
+    m_print_menu = false;
+	
     NRF_LOG_INFO("Preparing the test.\r\n");
     NRF_LOG_FLUSH();
 	
@@ -1316,7 +1313,7 @@ int main(void)
     ble_stack_init();
 	
 	sd_power_dcdc_mode_set(NRF_POWER_DCDC_ENABLE);
-	
+	 
     gap_params_init();
     conn_params_init();
     gatt_init();
@@ -1326,7 +1323,7 @@ int main(void)
     client_init();
 
     gatt_mtu_set(m_test_params.att_mtu);
-    data_len_ext_set(m_test_params.data_len_ext_enabled);
+    data_len_ext_set(&m_test_params);
     conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
 	
 	tx_power_set(m_test_params.tx_power);

@@ -40,7 +40,7 @@ static test_params_t m_test_params =
     .conn_evt_len_ext_enabled	= true,
 	.rxtx_phy                 	= BLE_GAP_PHY_2MBPS,
 	.tx_power				  	= 8,
-	.ble_version			  	= "BLE 5.0 HS",
+	.ble_version			  	= "BLE 5 HS",
 	.transfer_data_size			= 1024,
 	.link_budget				= 100,
 };
@@ -53,7 +53,7 @@ static const test_params_t ble_5_HS_version_params =
     .conn_evt_len_ext_enabled 	= true,
 	.rxtx_phy                 	= BLE_GAP_PHY_2MBPS,
 	.tx_power				  	= 8,	
-	.ble_version			  	= "BLE 5.0 HS",
+	.ble_version			  	= "BLE 5 HS",
 	.transfer_data_size			= 1024,
 	.link_budget				= 100,
 };
@@ -66,7 +66,7 @@ static const test_params_t ble_5_LR_version_params =
     .conn_evt_len_ext_enabled 	= false,
 	.rxtx_phy                 	= BLE_GAP_PHY_CODED,
 	.tx_power				  	= 8,
-	.ble_version			  	= "BLE 5.0 LR",
+	.ble_version			  	= "BLE 5 LR",
 	.transfer_data_size			= 100,
 	.link_budget				= 111,
 };
@@ -80,7 +80,7 @@ static const test_params_t ble_4_2_version_params =
 	.rxtx_phy                 	= BLE_GAP_PHY_1MBPS,
 	.tx_power				  	= 4,
 	.ble_version			  	= "BLE 4.2",
-	.transfer_data_size			= 1024,
+	.transfer_data_size			= 512,
 	.link_budget				= 100,
 };
 
@@ -98,6 +98,11 @@ static const test_params_t ble_4_1_version_params =
 };
 
 menu_page_t menu_main_page;
+
+void get_test_params(test_params_t *params)
+{
+	memcpy(params, &m_test_params, sizeof(test_params_t));
+}
 
 //BLE VERSION
 
@@ -123,8 +128,7 @@ void menu_ble_version_func(uint32_t option_index)
 			break;
 	}
 	
-	//update params
-	//TODO
+	set_all_parameters(&m_test_params);
 }
 
 menu_page_t menu_ble_version_page = 
@@ -151,8 +155,7 @@ void menu_phy_func(uint32_t option_index)
 {
 	m_test_params.rxtx_phy = phy_options[option_index];
 	
-	//update params
-	//TODO
+	set_all_parameters(&m_test_params);
 }
 
 menu_page_t menu_phy_page = 
@@ -179,8 +182,7 @@ void menu_conn_int_func(uint32_t option_index)
 {
 	m_test_params.conn_interval = conn_int_options[option_index];
 	
-	//update params
-	//TODO
+	set_all_parameters(&m_test_params);
 }
 
 menu_page_t menu_conn_int_page = 
@@ -207,8 +209,7 @@ void menu_att_mtu_func(uint32_t option_index)
 {
 	m_test_params.att_mtu = att_mtu_options[option_index];
 	
-	//update params
-	//TODO
+	set_all_parameters(&m_test_params);
 }
 
 menu_page_t menu_att_mtu_page = 
@@ -236,8 +237,7 @@ void menu_data_length_ext_func(uint32_t option_index)
 {
 	m_test_params.data_len_ext_enabled = data_length_ext_options[option_index];
 	
-	//update params
-	//TODO
+	set_all_parameters(&m_test_params);
 }
 
 menu_page_t menu_data_length_ext_page = 
@@ -264,8 +264,7 @@ void menu_conn_evt_length_ext_func(uint32_t option_index)
 {
 	m_test_params.conn_evt_len_ext_enabled = conn_evt_length_ext_options[option_index];
 	
-	//update params
-	//TODO
+	set_all_parameters(&m_test_params);
 }
 
 menu_page_t menu_conn_evt_length_ext_page = 
@@ -292,8 +291,7 @@ void menu_tx_power_func(uint32_t option_index)
 {
 	m_test_params.tx_power = tx_power_options[option_index];
 	
-	//update params
-	//TODO
+	set_all_parameters(&m_test_params);
 }
 
 menu_page_t menu_tx_power_page = 
@@ -320,8 +318,7 @@ void menu_transfer_data_size_func(uint32_t option_index)
 {
 	m_test_params.transfer_data_size = transfer_data_size_options[option_index];
 	
-	//update params
-	//TODO
+	set_all_parameters(&m_test_params);
 }
 
 menu_page_t menu_transfer_data_size_page = 
@@ -381,6 +378,18 @@ menu_page_t *main_next_pages[MAIN_OPTIONS_SIZE] =
 	&menu_link_budget_page,
 };
 
+void menu_main_func(uint32_t option_index)
+{
+	if(option_index == 0)
+	{
+		test_begin(false);
+	}
+	else if(option_index == 1)
+	{
+		test_begin(true);
+	}
+}
+
 menu_page_t menu_main_page = 
 {
 	.nr_of_options			= MAIN_OPTIONS_SIZE,
@@ -391,7 +400,7 @@ menu_page_t menu_main_page =
 	.option_unit			= "",
 	.show_values			= true,
 	.index					= 0,
-	.callback				= NULL,
+	.callback				= menu_main_func,
 	.next_pages				= main_next_pages,
 };
 
