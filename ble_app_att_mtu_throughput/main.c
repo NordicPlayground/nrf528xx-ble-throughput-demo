@@ -77,7 +77,7 @@
 #define SENSITIVITY_1MBPS	      (-96)
 #define SENSITIVITY_2MBPS	      (-93)
 
-#define RSSI_MOVING_AVERAGE_ALPHA	0.5f		//higher value will lower the frequency of the filter
+#define RSSI_MOVING_AVERAGE_ALPHA	0.9f		//higher value will lower the frequency of the filter
 
 #define DISPLAY_TIMER_UPDATE_INTERVAL	APP_TIMER_TICKS(200, TIMER_PRESCALER)
 APP_TIMER_DEF(m_display_timer_id);
@@ -136,17 +136,6 @@ static ble_db_discovery_t m_ble_db_discovery;    /**< Structure used to identify
 
 /* Name to use for advertising and connection. */
 static const char m_target_periph_name[] = DEVICE_NAME;
-
-/* Test parameters. */
-static test_params_t m_test_params =
-{
-    .att_mtu                  = ATT_MTU_DEFAULT,
-    .conn_interval            = CONN_INTERVAL_DEFAULT_MS,
-    .data_len_ext_enabled     = true,
-    .conn_evt_len_ext_enabled = true,
-	.rxtx_phy                 = BLE_GAP_PHY_2MBPS,
-	.tx_power				  = 8,
-};
 
 /* Scan parameters requested for scanning and connection. */
 static ble_gap_scan_params_t const m_scan_param =
@@ -310,9 +299,12 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
             m_notif_enabled = true;
             if (m_board_role == BOARD_TESTER)
             {
+				test_params_t test_params;
+				get_test_params(&test_params);
+				
 				m_conn_interval_configured     = true;
-				//m_conn_param.min_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS);
-				//m_conn_param.max_conn_interval = MSEC_TO_UNITS(m_test_params.conn_interval, UNIT_1_25_MS);
+				m_conn_param.min_conn_interval = MSEC_TO_UNITS(test_params.conn_interval, UNIT_1_25_MS);
+				m_conn_param.max_conn_interval = MSEC_TO_UNITS(test_params.conn_interval, UNIT_1_25_MS);
 				err_code = sd_ble_gap_conn_param_update(m_conn_handle,
 																   &m_conn_param);
 				if (err_code != NRF_SUCCESS)
@@ -682,8 +674,9 @@ void on_ble_gap_evt_adv_report(ble_gap_evt_t const * p_gap_evt)
     (void) sd_ble_gap_adv_stop();
 
     // Initiate connection.
-    m_conn_param.min_conn_interval = CONN_INTERVAL_DEFAULT;
-    m_conn_param.max_conn_interval = CONN_INTERVAL_DEFAULT;
+	//start with low interval to make the connection setup go fast
+    m_conn_param.min_conn_interval = MSEC_TO_UNITS(7.5, UNIT_1_25_MS);
+    m_conn_param.max_conn_interval = MSEC_TO_UNITS(7.5, UNIT_1_25_MS);
  	
     ret_code_t err_code;
     err_code = sd_ble_gap_connect(&p_gap_evt->params.adv_report.peer_addr,
@@ -1139,36 +1132,11 @@ void data_len_ext_set(test_params_t *params)
     APP_ERROR_CHECK(err_code);
 }
 
-void update_link_budget()
-{
-	int8_t sensitivity;
-	
-	switch(m_test_params.rxtx_phy)
-	{
-		case BLE_GAP_PHY_2MBPS:
-			sensitivity = SENSITIVITY_2MBPS;
-			break;
-		case BLE_GAP_PHY_1MBPS:
-			sensitivity = SENSITIVITY_1MBPS;
-			break;
-		case BLE_GAP_PHY_CODED:
-			sensitivity = SENSITIVITY_125KBPS;
-			break;
-		default:
-			APP_ERROR_CHECK(NRF_ERROR_INVALID_STATE);
-			break;
-	}
-	
-	m_test_params.link_budget = m_test_params.tx_power - sensitivity;
-}
-
 void tx_power_set(int8_t tx_power)
 {
 	uint32_t err_code;
 	err_code = sd_ble_gap_tx_power_set(tx_power);
 	APP_ERROR_CHECK(err_code);
-	
-	update_link_budget();
 }
 
 void set_all_parameters(test_params_t *params)
@@ -1220,7 +1188,7 @@ void test_begin(bool continuous)
 	m_transfer_data.last_throughput = 0;
 	memset(&m_rssi_data, 0, sizeof(m_rssi_data));
 	m_rssi_data.max = -128;
-    //m_rssi_data.range_multiplier_max = 500;
+    m_rssi_data.range_multiplier_max = 500;
     m_print_menu = false;
 	
     NRF_LOG_INFO("Preparing the test.\r\n");
@@ -1278,15 +1246,24 @@ static void display_timer_handler(void *p_context)
 		m_rssi_data.sum += rssi;
 		m_rssi_data.nr_of_samples++;
 		m_rssi_data.current_rssi = rssi;
+		
+		test_params_t test_params;
+		get_test_params(&test_params);
+		
 		//check in case the RSSI value magically drops below the spec
-		if( (-m_rssi_data.moving_average) > (m_test_params.link_budget - m_test_params.tx_power))
+		if( (-m_rssi_data.moving_average) > (test_params.link_budget - test_params.tx_power))
 		{
 			m_rssi_data.link_budget = 0;
 		}
 		else
 		{
-			m_rssi_data.link_budget = m_test_params.link_budget - m_test_params.tx_power + m_rssi_data.moving_average;
+			m_rssi_data.link_budget = test_params.link_budget - test_params.tx_power + m_rssi_data.moving_average;
 		}
+		
+		if(m_rssi_data.link_budget > m_rssi_data.link_budget_max)
+        {
+            m_rssi_data.link_budget_max = m_rssi_data.link_budget;
+        }
 		
 		m_rssi_data.range_multiplier = pow(10.0, (double)m_rssi_data.link_budget/20.0);
 	}
@@ -1294,7 +1271,6 @@ static void display_timer_handler(void *p_context)
 
 int main(void)
 {
-	
     log_init();
 	
 	display_init();
@@ -1322,11 +1298,14 @@ int main(void)
     server_init();
     client_init();
 
-    gatt_mtu_set(m_test_params.att_mtu);
-    data_len_ext_set(&m_test_params);
-    conn_evt_len_ext_set(m_test_params.conn_evt_len_ext_enabled);
+	test_params_t test_params;
+	get_test_params(&test_params);
+
+    gatt_mtu_set(test_params.att_mtu);
+    data_len_ext_set(&test_params);
+    conn_evt_len_ext_set(test_params.conn_evt_len_ext_enabled);
 	
-	tx_power_set(m_test_params.tx_power);
+	tx_power_set(test_params.tx_power);
 	
     NRF_LOG_INFO("ATT MTU example started.\r\n");
     NRF_LOG_INFO("Press button 1 on the board connected to the PC.\r\n");
@@ -1343,7 +1322,7 @@ int main(void)
 	if(button == BUTTON_1)
 	{
 		m_board_role = BOARD_TESTER;
-		preferred_phy_set(m_test_params.rxtx_phy);
+		preferred_phy_set(test_params.rxtx_phy);
 		m_print_menu = true;
 	}
 	else
