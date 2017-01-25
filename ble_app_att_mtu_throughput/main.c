@@ -664,8 +664,7 @@ void on_ble_gap_evt_adv_report(ble_gap_evt_t const * p_gap_evt)
         return;
     }
 
-    NRF_LOG_INFO("Device \"%s\" with matching name found, sending a connection request.\r\n",
-                 (uint32_t) m_target_periph_name);
+    NRF_LOG_INFO("Device with matching name found");
 	
 	display_print_line_inc("Device with matching name found");
 	m_display_show = true;
@@ -1307,7 +1306,10 @@ int main(void)
 	
 	tx_power_set(test_params.tx_power);
 	
-    NRF_LOG_INFO("ATT MTU example started.\r\n");
+	//clear terminal screen (works in putty, tera term and RTT viewer, does not work in termite)
+	NRF_LOG_INFO("\033[2J\033[;H");
+	
+    NRF_LOG_INFO("Throughput demo started.\r\n");
     NRF_LOG_INFO("Press button 1 on the board connected to the PC.\r\n");
     NRF_LOG_INFO("Press button 2 on other board.\r\n");
     NRF_LOG_FLUSH();

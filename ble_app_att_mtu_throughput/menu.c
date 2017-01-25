@@ -4,6 +4,7 @@
 #include "display.h"
 #include "menu.h"
 #include "ble_gap.h"
+#include "nrf_log.h"
 
 typedef enum
 {
@@ -406,7 +407,7 @@ menu_page_t menu_main_page =
 
 void print_var(void *array, uint8_t index, type_t type, char *unit, uint32_t x_pos, uint8_t line_nr)
 {
-	char str[30];
+	static char str[30];
 	
 	bool *var_array_b;
 	int8_t *var_array_i8;
@@ -455,6 +456,8 @@ void print_var(void *array, uint8_t index, type_t type, char *unit, uint32_t x_p
 	}
 	
 	display_print_line(str, x_pos, line_nr);
+	NRF_LOG_RAW_INFO("\033[%d;%dH", line_nr+1, x_pos/4);
+	NRF_LOG_RAW_INFO("%s", nrf_log_push(str));
 }
 
 void menu_print()
@@ -485,10 +488,15 @@ void menu_print()
 		}
 		
 		display_clear();
+		//clear terminal screen (works in putty, tera term and RTT viewer, does not work in termite)
+		NRF_LOG_RAW_INFO("\033[2J\033[;H");
 
 		//display how the buttons works at the bottom of the page
 		display_print_line("[Btn1: UP, Btn2: DOWN, Btn3: Sel, Btn4: Back]", 0, max_lines+1);
 		display_print_line("->", 0, cursor_index);
+		
+		NRF_LOG_RAW_INFO("\033[%d;%dH", cursor_index + 1, 0);
+		NRF_LOG_RAW_INFO("->");
 		
 		for(int8_t i = 0; i < max_index; i++)
 		{
