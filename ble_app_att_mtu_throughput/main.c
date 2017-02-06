@@ -1821,12 +1821,14 @@ static bool is_test_ready()
 
 static void display_timer_handler(void *p_context)
 {
+	int8_t rssi;
+	uint32_t err_code;
+	
 	m_transfer_data.counter_ticks = counter_get();
 	m_transfer_data.bytes_transfered = m_amts.bytes_sent;
 	m_display_show_transfer_data = true;
 	
-	int8_t rssi;
-	uint32_t err_code;
+	NRF_LOG_INFO("Transferred " NRF_LOG_FLOAT_MARKER " KB\r\n", NRF_LOG_FLOAT((float)m_transfer_data.bytes_transfered/1000));
 	
 	err_code = sd_ble_gap_rssi_get(m_conn_handle, &rssi);
 	if(err_code == NRF_SUCCESS)
