@@ -405,7 +405,7 @@ menu_page_t menu_main_page =
 	.next_pages				= main_next_pages,
 };
 
-void print_var(void *array, uint8_t index, type_t type, char *unit, uint32_t x_pos, uint8_t line_nr)
+void print_var(void *array, uint8_t index, type_t type, char *unit, uint32_t x_pos, uint8_t line_nr, bool terminal)
 {
 	static char str[30];
 	
@@ -455,9 +455,16 @@ void print_var(void *array, uint8_t index, type_t type, char *unit, uint32_t x_p
 			break;
 	}
 	
-	display_print_line(str, x_pos, line_nr);
-	NRF_LOG_RAW_INFO("\033[%d;%dH", line_nr+1, x_pos/4);
-	NRF_LOG_RAW_INFO("%s", nrf_log_push(str));
+	if(terminal)
+	{
+		NRF_LOG_RAW_INFO("\033[%d;%dH", line_nr+1, x_pos/4);	//set position in terminal
+		NRF_LOG_RAW_INFO("%s", nrf_log_push(str));
+	}
+	else
+	{
+		display_print_line(str, x_pos, line_nr);
+	}
+	
 }
 
 void menu_print()
@@ -470,16 +477,17 @@ void menu_print()
 
 	uint8_t max_index = m_menu_current_page->nr_of_options;
 	uint8_t opt_index = m_menu_current_page->index;
-	int8_t line_index;
+	int8_t line_index;	//first line displayed on the screen
 	uint8_t cursor_index;
 	
 	while(1)
 	{
-		//start scrolling if opt_index is larger than the max lines
+		//start scrolling if opt_index is larger than the max lines that can be displayed on the screen - 1
+		//(start scrolling when cursor is a t the line before the bottom line)
 		if(opt_index > (max_lines - 1))
 		{
 			line_index =  max_lines - 1 - opt_index;
-			cursor_index = max_lines - 1;
+			cursor_index = max_lines - 1;	//place cursor at the line before the bottom line
 		}
 		else
 		{
@@ -495,16 +503,19 @@ void menu_print()
 		display_print_line("[Btn1: UP, Btn2: DOWN, Btn3: Sel, Btn4: Back]", 0, max_lines+1);
 		display_print_line("->", 0, cursor_index);
 		
-		NRF_LOG_RAW_INFO("\033[%d;%dH", cursor_index + 1, 0);
+		NRF_LOG_RAW_INFO("\033[%d;0H", max_index+1);
+		NRF_LOG_RAW_INFO("[Btn1: UP, Btn2: DOWN, Btn3: Sel, Btn4: Back]");
+		NRF_LOG_RAW_INFO("\033[%d;%dH", opt_index + 1, 0);
 		NRF_LOG_RAW_INFO("->");
 		
 		for(int8_t i = 0; i < max_index; i++)
 		{
 			if((i+line_index) <= max_lines)
 			{
+				//print to display
 				print_var(m_menu_current_page->option_values, i, m_menu_current_page->option_type, 
-							m_menu_current_page->option_unit, text_pos, i + line_index);
-				
+						m_menu_current_page->option_unit, text_pos, i + line_index, false);
+			
 				if(m_menu_current_page->show_values)
 				{
 					if(m_menu_current_page->next_pages != NULL)
@@ -514,11 +525,30 @@ void menu_print()
 						if(next_page != NULL)
 						{
 							print_var(next_page->option_current_value, 0, next_page->option_type, 
-										next_page->option_unit, number_pos, i + line_index);
+										next_page->option_unit, number_pos, i + line_index, false);
 						}
 					}
 				}
 			}
+			
+			//print to terminal
+			print_var(m_menu_current_page->option_values, i, m_menu_current_page->option_type, 
+						m_menu_current_page->option_unit, text_pos, i, true);
+			
+			if(m_menu_current_page->show_values)
+			{
+				if(m_menu_current_page->next_pages != NULL)
+				{
+					menu_page_t **next_pages = m_menu_current_page->next_pages;
+					menu_page_t *next_page = next_pages[i];
+					if(next_page != NULL)
+					{
+						print_var(next_page->option_current_value, 0, next_page->option_type, 
+									next_page->option_unit, number_pos, i, true);
+					}
+				}
+			}
+			
 		}
 		
 		//Update the display

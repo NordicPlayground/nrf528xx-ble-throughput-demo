@@ -230,7 +230,7 @@ void test_run(bool wait_for_button)
 	if(wait_for_button)
 	{
 		NRF_LOG_RAW_INFO("\r\n");
-		NRF_LOG_INFO("Test is ready. Press any button to run.\r\n");
+		NRF_LOG_RAW_INFO("Test is ready. Press any button to run.\r\n");
 		NRF_LOG_FLUSH();
 		
 		display_print_line_inc("Test is ready. Press any button to run.");
@@ -259,7 +259,7 @@ void terminate_test(void)
 	
     if (m_conn_handle != BLE_CONN_HANDLE_INVALID)
     {
-        NRF_LOG_INFO("Disconnecting.\r\n");
+        NRF_LOG_RAW_INFO("Disconnecting.\r\n");
 		
         ret_code_t ret = sd_ble_gap_disconnect(m_conn_handle,
             BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
@@ -292,7 +292,7 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
         case SERVICE_EVT_NOTIF_ENABLED:
         {
             bsp_board_led_on(LED_READY);
-            NRF_LOG_INFO("Notifications enabled.\r\n");
+            NRF_LOG_RAW_INFO("Notifications enabled.\r\n");
 			display_print_line_inc("Notifications enabled.");
 			m_display_show = true;
 			
@@ -317,7 +317,7 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 
         case SERVICE_EVT_NOTIF_DISABLED:
             bsp_board_led_off(LED_READY);
-            NRF_LOG_INFO("Notifications disabled.\r\n");
+            NRF_LOG_RAW_INFO("Notifications disabled.\r\n");
             break;
 
         case SERVICE_EVT_TRANSFER_1KB:
@@ -341,15 +341,15 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 			float throughput = (float)(sent_octet_cnt * 32768) / (float)counter_ticks;
 			throughput = throughput / (float)1000;
 			
-            NRF_LOG_INFO("Done.\r\n\r\n");
-            NRF_LOG_INFO("=============================\r\n");
-            NRF_LOG_INFO("Time: " NRF_LOG_FLOAT_MARKER " seconds elapsed.\r\n",
+            NRF_LOG_RAW_INFO("\033[30;0H");	//move cursor to correct position
+			NRF_LOG_RAW_INFO("\033[0J");	//clear screen from cursor and to end of screen
+			
+			NRF_LOG_RAW_INFO("Test done\r\n");
+            NRF_LOG_RAW_INFO("Time: " NRF_LOG_FLOAT_MARKER " seconds elapsed.\r\n",
                          NRF_LOG_FLOAT((float)counter_ticks / 32768));
-            NRF_LOG_INFO("Throughput: " NRF_LOG_FLOAT_MARKER " Kbits/s.\r\n",
+            NRF_LOG_RAW_INFO("Throughput: " NRF_LOG_FLOAT_MARKER " Kbits/s.\r\n",
                          NRF_LOG_FLOAT(throughput));
-            NRF_LOG_INFO("=============================\r\n");
-            NRF_LOG_INFO("Sent %u bytes of ATT payload.\r\n", evt.bytes_transfered_cnt);
-            NRF_LOG_INFO("Retrieving amount of bytes received from peer...\r\n");
+            NRF_LOG_RAW_INFO("Sent %u bytes of ATT payload.\r\n", evt.bytes_transfered_cnt);
 			
 			m_transfer_data.last_throughput = throughput;
 			
@@ -363,15 +363,6 @@ static void amts_evt_handler(nrf_ble_amts_evt_t evt)
 				m_display_show_transfer_data = false;
 				terminate_test();
 			}
-			
-			/*
-            err_code = nrf_ble_amtc_rcb_read(&m_amtc);
-            if (err_code != NRF_SUCCESS)
-            {
-                NRF_LOG_ERROR("nrf_ble_amt_c_rcb_read returned 0x%x.\r\n", err_code);
-                terminate_test();
-            }
-			*/
 
         } break;
     }
@@ -388,7 +379,7 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
     {
         case NRF_BLE_AMT_C_EVT_DISCOVERY_COMPLETE:
         {
-            NRF_LOG_INFO("AMT service discovered on the peer.\r\n");
+            NRF_LOG_RAW_INFO("AMT service discovered on the peer.\r\n");
 			
             err_code = nrf_ble_amtc_handles_assign(p_amt_c ,
                                                     p_evt->conn_handle,
@@ -422,7 +413,7 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
 								
 				if((kbytes_cnt % 10) == 0)
 				{
-					NRF_LOG_INFO("Received %u kbytes\r\n", kbytes_cnt);
+					NRF_LOG_RAW_INFO("Received %u kbytes\r\n", kbytes_cnt);
 				}
 
                 nrf_ble_amts_rbc_set(&m_amts, p_evt->params.hvx.bytes_rcvd);
@@ -437,7 +428,7 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
                 bytes_cnt  = 0;
                 kbytes_cnt = 0;
 
-                NRF_LOG_INFO("AMT Transfer complete, received %u bytes.\r\n",
+                NRF_LOG_RAW_INFO("AMT Transfer complete, received %u bytes.\r\n",
                              p_evt->params.hvx.bytes_rcvd);
 
                 nrf_ble_amts_rbc_set(&m_amts, p_evt->params.hvx.bytes_rcvd);
@@ -446,7 +437,7 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
         } break;
 
         case NRF_BLE_AMT_C_EVT_RBC_READ_RSP:
-            NRF_LOG_INFO("AMT peer received %u bytes (%u KBytes).\r\n",
+            NRF_LOG_RAW_INFO("AMT peer received %u bytes (%u KBytes).\r\n",
                          (p_evt->params.rcv_bytes_cnt), (p_evt->params.rcv_bytes_cnt / 1024));
 
             terminate_test();
@@ -580,13 +571,13 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
 
     if (m_gap_role == BLE_GAP_ROLE_PERIPH)
     {
-        NRF_LOG_INFO("Connected as a peripheral.\r\n");
+        NRF_LOG_RAW_INFO("Connected as a peripheral.\r\n");
 		display_print_line_inc("Connected as a peripheral.");
 		m_display_show = true;
     }
     else if (m_gap_role == BLE_GAP_ROLE_CENTRAL)
     {
-        NRF_LOG_INFO("Connected as a central.\r\n");
+        NRF_LOG_RAW_INFO("Connected as a central.\r\n");
 		display_print_line_inc("Connected as a central.");
 		m_display_show = true;
     }
@@ -595,7 +586,7 @@ void on_ble_gap_evt_connected(ble_gap_evt_t const * p_gap_evt)
     (void) sd_ble_gap_scan_stop();
     (void) sd_ble_gap_adv_stop();
 
-    NRF_LOG_INFO("Discovering GATT database...\r\n");
+    NRF_LOG_RAW_INFO("Discovering GATT database...\r\n");
 
     // Zero the database before starting discovery.
     memset(&m_ble_db_discovery, 0x00, sizeof(m_ble_db_discovery));
@@ -638,7 +629,7 @@ void on_ble_gap_evt_disconnected(ble_gap_evt_t const * p_gap_evt)
 {
     m_conn_handle = BLE_CONN_HANDLE_INVALID;
 
-    NRF_LOG_INFO("Disconnected (reason 0x%x).\r\n", p_gap_evt->params.disconnected.reason);
+    NRF_LOG_RAW_INFO("Disconnected (reason 0x%x).\r\n", p_gap_evt->params.disconnected.reason);
 
     if (m_run_test)
     {
@@ -664,7 +655,7 @@ void on_ble_gap_evt_adv_report(ble_gap_evt_t const * p_gap_evt)
         return;
     }
 
-    NRF_LOG_INFO("Device with matching name found");
+    NRF_LOG_RAW_INFO("Device with matching name found");
 	
 	display_print_line_inc("Device with matching name found");
 	m_display_show = true;
@@ -748,19 +739,19 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 			switch(phy_update.tx_phy)
 			{
 				case BLE_GAP_PHY_2MBPS:
-					NRF_LOG_INFO("PHY updated to 2Mbps\r\n");
+					NRF_LOG_RAW_INFO("PHY updated to 2Mbps\r\n");
 					display_print_line_inc("PHY updated to 2Mbps");
 					break;
 				case BLE_GAP_PHY_1MBPS:
-					NRF_LOG_INFO("PHY updated to 1Mbps\r\n");
+					NRF_LOG_RAW_INFO("PHY updated to 1Mbps\r\n");
 					display_print_line_inc("PHY updated to 1Mbps");
 					break;
 				case BLE_GAP_PHY_CODED:
-					NRF_LOG_INFO("PHY updated to 125Kbps\r\n");
+					NRF_LOG_RAW_INFO("PHY updated to 125Kbps\r\n");
 					display_print_line_inc("PHY updated to 125Kbps");
 					break;
 				default:
-					NRF_LOG_INFO("PHY updated to unknown\r\n");
+					NRF_LOG_RAW_INFO("PHY updated to unknown\r\n");
 					display_print_line_inc("PHY updated to unknown");
 					break;
 			}
@@ -772,7 +763,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 		case BLE_EVT_TX_COMPLETE:
 			if(!m_counter_started)
 			{
-				NRF_LOG_INFO("Counter started\r\n");
+				NRF_LOG_RAW_INFO("Counter started\r\n");
 				counter_start();
 				m_counter_started = true;
 			}
@@ -863,7 +854,7 @@ void advertising_start(void)
         .timeout     = 0,
     };
 
-    NRF_LOG_INFO("Starting advertising.\r\n");
+    NRF_LOG_RAW_INFO("Starting advertising.\r\n");
 	
 	display_print_line_inc("Starting advertising.");
 	m_display_show = true;
@@ -880,7 +871,7 @@ void advertising_start(void)
  */
 void scan_start(void)
 {
-    NRF_LOG_INFO("Starting scan.\r\n");
+    NRF_LOG_RAW_INFO("Starting scan.\r\n");
 	
 	display_print_line_inc("Starting scan.");
 	m_display_show = true;
@@ -1000,7 +991,7 @@ static void conn_params_init(void)
 /**@brief Function for handling events from the GATT library. */
 void gatt_evt_handler(nrf_ble_gatt_t * p_gatt, nrf_ble_gatt_evt_t * p_evt)
 {
-    NRF_LOG_INFO("ATT MTU exchange completed.\r\n");
+    NRF_LOG_RAW_INFO("ATT MTU exchange completed.\r\n");
 	display_print_line_inc("ATT MTU exchange completed.");
 	m_display_show = true;
     m_mtu_exchanged = true;
@@ -1106,7 +1097,7 @@ void conn_evt_len_ext_set(bool status)
 		err_code = sd_ble_opt_set(BLE_COMMON_OPT_CONN_BW, &opt);
 		APP_ERROR_CHECK(err_code);
 	}
-	NRF_LOG_INFO("Setting connection event extension to %d\r\n", opt.common_opt.conn_evt_ext.enable);
+	NRF_LOG_RAW_INFO("Setting connection event extension to %d\r\n", opt.common_opt.conn_evt_ext.enable);
 }
 
 
@@ -1190,7 +1181,7 @@ void test_begin(bool continuous)
     m_rssi_data.range_multiplier_max = 500;
     m_print_menu = false;
 	
-    NRF_LOG_INFO("Preparing the test.\r\n");
+    NRF_LOG_RAW_INFO("\r\n\r\n\r\nPreparing the test.\r\n");
     NRF_LOG_FLUSH();
 	
 	display_clear();
@@ -1306,12 +1297,12 @@ int main(void)
 	
 	tx_power_set(test_params.tx_power);
 	
-	//clear terminal screen (works in putty, tera term and RTT viewer, does not work in termite)
-	NRF_LOG_INFO("\033[2J\033[;H");
+	//clear terminal screen and place cursor at top of page (works in putty, tera term and RTT viewer, does not work in termite)
+	NRF_LOG_RAW_INFO("\033[2J\033[;H");
 	
-    NRF_LOG_INFO("Throughput demo started.\r\n");
-    NRF_LOG_INFO("Press button 1 on the board connected to the PC.\r\n");
-    NRF_LOG_INFO("Press button 2 on other board.\r\n");
+    NRF_LOG_RAW_INFO("Throughput demo started.\r\n");
+    NRF_LOG_RAW_INFO("Press button 1 on the board connected to the PC.\r\n");
+    NRF_LOG_RAW_INFO("Press button 2 on other board.\r\n");
     NRF_LOG_FLUSH();
 	
 	display_clear();
