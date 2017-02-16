@@ -455,7 +455,9 @@ uint32_t phy_str(uint8_t phy)
     {
         "1 Mbps",
         "2 Mbps",
+#if defined(S140)
         "125 Kbps",
+#endif
         "Unknown"
     };
 
@@ -467,9 +469,11 @@ uint32_t phy_str(uint8_t phy)
         case BLE_GAP_PHY_2MBPS:
             return (uint32_t)(phy_str[1]);
 
+#if defined(S140)
         case BLE_GAP_PHY_CODED:
             return (uint32_t)(phy_str[2]);
-
+#endif
+		
         default:
             return (uint32_t)(phy_str[3]);
     }
@@ -746,10 +750,12 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 					NRF_LOG_RAW_INFO("PHY updated to 1Mbps\r\n");
 					display_print_line_inc("PHY updated to 1Mbps");
 					break;
+#if defined(S140)
 				case BLE_GAP_PHY_CODED:
 					NRF_LOG_RAW_INFO("PHY updated to 125Kbps\r\n");
 					display_print_line_inc("PHY updated to 125Kbps");
 					break;
+#endif
 				default:
 					NRF_LOG_RAW_INFO("PHY updated to unknown\r\n");
 					display_print_line_inc("PHY updated to unknown");
@@ -1163,10 +1169,12 @@ void set_all_parameters(test_params_t *params)
 				params->ble_version = "BLE 4.1";
 			}
 			break;
+#if defined(S140)
 		case BLE_GAP_PHY_CODED:
 			params->link_budget = params->tx_power + 103;
 			params->ble_version = "BLE 5 Long Range";
 			break;
+#endif
 	}
 }
 
@@ -1321,7 +1329,11 @@ int main(void)
 	else
 	{
 		m_board_role = BOARD_DUMMY;
+#if defined(S140)
 		preferred_phy_set(BLE_GAP_PHY_2MBPS | BLE_GAP_PHY_1MBPS | BLE_GAP_PHY_CODED);
+#elif defined(S132)
+		preferred_phy_set(BLE_GAP_PHY_2MBPS | BLE_GAP_PHY_1MBPS);
+#endif
 		advertising_start();
 	}
 

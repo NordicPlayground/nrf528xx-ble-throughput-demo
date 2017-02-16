@@ -41,7 +41,11 @@ static test_params_t m_test_params =
     .data_len_ext_enabled     	= true,
     .conn_evt_len_ext_enabled	= true,
 	.rxtx_phy                 	= BLE_GAP_PHY_2MBPS,
+#if defined(S132)
+	.tx_power				  	= 4,
+#elif defined(S140)
 	.tx_power				  	= 8,
+#endif
 	.ble_version			  	= "BLE 5 High Speed",
 	.transfer_data_size			= 1024,
 	.link_budget				= 100,
@@ -54,12 +58,17 @@ static const test_params_t ble_5_HS_version_params =
     .data_len_ext_enabled     	= true,
     .conn_evt_len_ext_enabled 	= true,
 	.rxtx_phy                 	= BLE_GAP_PHY_2MBPS,
-	.tx_power				  	= 8,	
+#if defined(S132)
+	.tx_power				  	= 4,
+#elif defined(S140)
+	.tx_power				  	= 8,
+#endif
 	.ble_version			  	= "BLE 5 High Speed",
 	.transfer_data_size			= 1024,
 	.link_budget				= 100,
 };
 
+#if defined(S140)
 static const test_params_t ble_5_LR_version_params =
 {
     .att_mtu                  	= 23,
@@ -72,6 +81,7 @@ static const test_params_t ble_5_LR_version_params =
 	.transfer_data_size			= 100,
 	.link_budget				= 111,
 };
+#endif
 
 static const test_params_t ble_4_2_version_params =
 {
@@ -110,7 +120,11 @@ void get_test_params(test_params_t *params)
 
 #define BLE_VERSION_OPTIONS_SIZE 4
 
+#if defined(S132)
+char *ble_version_options[BLE_VERSION_OPTIONS_SIZE] = {"BLE 5 High Speed", "BLE 4.2", "BLE 4.1"};
+#elif defined(S140)
 char *ble_version_options[BLE_VERSION_OPTIONS_SIZE] = {"BLE 5 High Speed", "BLE 5 Long Range", "BLE 4.2", "BLE 4.1"};
+#endif
 
 void menu_ble_version_func(uint32_t option_index)
 {
@@ -119,6 +133,14 @@ void menu_ble_version_func(uint32_t option_index)
 		case 0:
 			memcpy(&m_test_params, &ble_5_HS_version_params, sizeof(test_params_t));
 			break;
+#if defined(S132)
+		case 1:
+			memcpy(&m_test_params, &ble_4_2_version_params, sizeof(test_params_t));
+			break;
+		case 2:
+			memcpy(&m_test_params, &ble_4_1_version_params, sizeof(test_params_t));
+			break;
+#elif defined(S140)
 		case 1:
 			memcpy(&m_test_params, &ble_5_LR_version_params, sizeof(test_params_t));
 			break;
@@ -128,6 +150,7 @@ void menu_ble_version_func(uint32_t option_index)
 		case 3:
 			memcpy(&m_test_params, &ble_4_1_version_params, sizeof(test_params_t));
 			break;
+#endif
 	}
 	
 	set_all_parameters(&m_test_params);
@@ -149,9 +172,15 @@ menu_page_t menu_ble_version_page =
 
 //PREFERRED PHY
 
-#define PHY_OPTIONS_SIZE 3
+#if defined(S132)
+#define PHY_OPTIONS_SIZE 2
+uint8_t phy_options[PHY_OPTIONS_SIZE] = {BLE_GAP_PHY_2MBPS, BLE_GAP_PHY_1MBPS};
 
+#elif defined(S140)
+#define PHY_OPTIONS_SIZE 3
 uint8_t phy_options[PHY_OPTIONS_SIZE] = {BLE_GAP_PHY_2MBPS, BLE_GAP_PHY_1MBPS, BLE_GAP_PHY_CODED};
+
+#endif
 
 void menu_phy_func(uint32_t option_index)
 {
@@ -285,9 +314,15 @@ menu_page_t menu_conn_evt_length_ext_page =
 
 //TX POWER
 
-#define TX_POWER_OPTIONS_SIZE 3
+#if defined(S132)
+#define TX_POWER_OPTIONS_SIZE 2
+int8_t tx_power_options[TX_POWER_OPTIONS_SIZE] = {0, 4};
 
+#elif defined(S140)
+#define TX_POWER_OPTIONS_SIZE 3
 int8_t tx_power_options[TX_POWER_OPTIONS_SIZE] = {0, 4, 8};
+
+#endif
 
 void menu_tx_power_func(uint32_t option_index)
 {
@@ -305,7 +340,11 @@ menu_page_t menu_tx_power_page =
 	.option_type			= INT8_T,
 	.option_unit			= "dBm",
 	.show_values			= false,
+#if defined(S132)
+	.index					= 1,
+#elif defined(S140)
 	.index					= 2,
+#endif
 	.callback				= menu_tx_power_func,
 	.next_pages				= NULL,
 };

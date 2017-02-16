@@ -314,13 +314,9 @@ void display_print_line(char * line, uint32_t x_pos, uint8_t line_nr)
 	}
 }
 
+//TODO: move the log stuff to another function
 void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data)
 {
-	
-	if(!m_display_connected)
-	{
-		return;
-	}
 	static uint32_t last_counter_ticks = 0;
 	static uint32_t last_bytes_transferred = 0;
 	
@@ -344,21 +340,23 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *r
 	display_print_line_center_inc("Transferring data:");
 	NRF_LOG_RAW_INFO("Transferring data:\r\n");
 	
-	
-	//print filled bar
-	fb_rectangle((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
-				line_counter*TEXT_HEIGHT + TEXT_HEIGHT/2 + TEXT_START_YPOS, 
-				(FB_UTIL_LCD_WIDTH + TRANSFER_BAR_LENGTH)/2, 
+	if(m_display_connected)
+	{
+		//print filled bar
+		fb_rectangle((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
+					line_counter*TEXT_HEIGHT + TEXT_HEIGHT/2 + TEXT_START_YPOS, 
+					(FB_UTIL_LCD_WIDTH + TRANSFER_BAR_LENGTH)/2, 
+					(line_counter + TRANSFER_BAR_HEIGHT_IN_LINES)*TEXT_HEIGHT + TEXT_START_YPOS + TEXT_HEIGHT/2, 
+					FB_COLOR_BLACK);
+		
+		fb_bar((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
+				line_counter*TEXT_HEIGHT + TEXT_HEIGHT/2 + TEXT_START_YPOS,
+				(FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2 + (uint32_t)(transfer_data->bytes_transfered/1024)*TRANSFER_BAR_LENGTH / transfer_data->kb_transfer_size, 
 				(line_counter + TRANSFER_BAR_HEIGHT_IN_LINES)*TEXT_HEIGHT + TEXT_START_YPOS + TEXT_HEIGHT/2, 
 				FB_COLOR_BLACK);
-	
-	fb_bar((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
-			line_counter*TEXT_HEIGHT + TEXT_HEIGHT/2 + TEXT_START_YPOS,
-			(FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2 + (uint32_t)(transfer_data->bytes_transfered/1024)*TRANSFER_BAR_LENGTH / transfer_data->kb_transfer_size, 
-			(line_counter + TRANSFER_BAR_HEIGHT_IN_LINES)*TEXT_HEIGHT + TEXT_START_YPOS + TEXT_HEIGHT/2, 
-			FB_COLOR_BLACK);
-	
-	line_counter += TRANSFER_BAR_HEIGHT_IN_LINES + 1;
+		
+		line_counter += TRANSFER_BAR_HEIGHT_IN_LINES + 1;
+	}
 	
 	NRF_LOG_RAW_INFO("[");
 	for(uint32_t i = 0; i < TERMINAL_TRANSFER_BAR_LENGTH; i++)
