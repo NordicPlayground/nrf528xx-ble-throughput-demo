@@ -1150,7 +1150,7 @@ void set_all_parameters(test_params_t *params)
 	{
 		case BLE_GAP_PHY_2MBPS:
 			params->link_budget = params->tx_power + 92;
-			params->ble_version = "BLE 5 HS";
+			params->ble_version = "BLE 5 High Speed";
 			break;
 		case BLE_GAP_PHY_1MBPS:
 			params->link_budget = params->tx_power + 96;
@@ -1165,7 +1165,7 @@ void set_all_parameters(test_params_t *params)
 			break;
 		case BLE_GAP_PHY_CODED:
 			params->link_budget = params->tx_power + 103;
-			params->ble_version = "BLE 5 LR";
+			params->ble_version = "BLE 5 Long Range";
 			break;
 	}
 }

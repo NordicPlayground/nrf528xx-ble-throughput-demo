@@ -19,6 +19,7 @@ typedef enum
 
 typedef void (*handler_t)(uint32_t option_index);
 
+//TODO: make pointers point to const values
 typedef struct
 {
 	uint8_t nr_of_options;
@@ -41,7 +42,7 @@ static test_params_t m_test_params =
     .conn_evt_len_ext_enabled	= true,
 	.rxtx_phy                 	= BLE_GAP_PHY_2MBPS,
 	.tx_power				  	= 8,
-	.ble_version			  	= "BLE 5 HS",
+	.ble_version			  	= "BLE 5 High Speed",
 	.transfer_data_size			= 1024,
 	.link_budget				= 100,
 };
@@ -54,7 +55,7 @@ static const test_params_t ble_5_HS_version_params =
     .conn_evt_len_ext_enabled 	= true,
 	.rxtx_phy                 	= BLE_GAP_PHY_2MBPS,
 	.tx_power				  	= 8,	
-	.ble_version			  	= "BLE 5 HS",
+	.ble_version			  	= "BLE 5 High Speed",
 	.transfer_data_size			= 1024,
 	.link_budget				= 100,
 };
@@ -67,7 +68,7 @@ static const test_params_t ble_5_LR_version_params =
     .conn_evt_len_ext_enabled 	= false,
 	.rxtx_phy                 	= BLE_GAP_PHY_CODED,
 	.tx_power				  	= 8,
-	.ble_version			  	= "BLE 5 LR",
+	.ble_version			  	= "BLE 5 Long Range",
 	.transfer_data_size			= 100,
 	.link_budget				= 111,
 };
@@ -109,7 +110,7 @@ void get_test_params(test_params_t *params)
 
 #define BLE_VERSION_OPTIONS_SIZE 4
 
-char *ble_version_options[BLE_VERSION_OPTIONS_SIZE] = {"BLE 5 HS", "BLE 5 LR", "BLE 4.2", "BLE 4.1"};
+char *ble_version_options[BLE_VERSION_OPTIONS_SIZE] = {"BLE 5 High Speed", "BLE 5 Long Range", "BLE 4.2", "BLE 4.1"};
 
 void menu_ble_version_func(uint32_t option_index)
 {
@@ -500,11 +501,11 @@ void menu_print()
 		NRF_LOG_RAW_INFO("\033[2J\033[;H");
 
 		//display how the buttons works at the bottom of the page
-		display_print_line("[Btn1: UP, Btn2: DOWN, Btn3: Sel, Btn4: Back]", 0, max_lines+1);
+		display_print_line("[Btn1: Up, Btn2: Sel, Btn3: Down, Btn4: Back]", 0, max_lines+1);
 		display_print_line("->", 0, cursor_index);
 		
 		NRF_LOG_RAW_INFO("\033[%d;0H", max_index+1);
-		NRF_LOG_RAW_INFO("[Btn1: UP, Btn2: DOWN, Btn3: Sel, Btn4: Back]");
+		NRF_LOG_RAW_INFO("[Btn1: UP, Btn2: SEL, Btn3: DOWN, Btn4: BACK]");
 		NRF_LOG_RAW_INFO("\033[%d;%dH", opt_index + 1, 0);
 		NRF_LOG_RAW_INFO("->");
 		
