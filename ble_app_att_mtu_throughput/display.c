@@ -15,6 +15,7 @@
 #include "drv_pca63520_io.h"
 #include "pca63520_util.h"
 #include "nrf_gpio.h"
+#include "nrf_log.h"
 
 #include "display.h"
 #include "counter.h"
@@ -28,6 +29,9 @@
 #define TRANSFER_BAR_HEIGHT_IN_LINES 	2
 #define TEXT_START_YPOS 				44
 #define TITLE 							"BLE THROUGHPUT DEMO"
+#define NR_OF_LINES						10
+
+#define TERMINAL_TRANSFER_BAR_LENGTH	40
 
 #ifndef MLCD_PCA63520_2INCH7
 #error "Runs only on the PCA63520 board."
@@ -276,7 +280,7 @@ void display_print_line_inc(char * line)
 	{
 		return;
 	}
-	if(line_counter < 10)
+	if(line_counter < NR_OF_LINES)
 	{
 		line_counter++;
 		fb_string_put(TEXT_LEFT_MARGIN, (line_counter - 1) * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
@@ -289,7 +293,7 @@ void display_print_line_center_inc(char * line)
 	{
 		return;
 	}
-	if(line_counter < 10)
+	if(line_counter < NR_OF_LINES)
 	{
 		uint16_t x_pos = (FB_UTIL_LCD_WIDTH - calc_string_width(line)) / 2;
 		line_counter++;
@@ -303,15 +307,16 @@ void display_print_line(char * line, uint32_t x_pos, uint8_t line_nr)
 	{
 		return;
 	}
-	fb_string_put(x_pos + TEXT_LEFT_MARGIN, line_nr * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
+	
+	if(line_nr < NR_OF_LINES)
+	{
+		fb_string_put(x_pos + TEXT_LEFT_MARGIN, line_nr * TEXT_HEIGHT + TEXT_START_YPOS, line, FB_COLOR_BLACK);
+	}
 }
 
+//TODO: move the log stuff to another function
 void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data)
 {
-	if(!m_display_connected)
-	{
-		return;
-	}
 	static uint32_t last_counter_ticks = 0;
 	static uint32_t last_bytes_transferred = 0;
 	
@@ -328,36 +333,59 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *r
 	}
 	
 	display_clear();
+
+	NRF_LOG_RAW_INFO("\033[30;0H");	//move cursor to correct position
+	NRF_LOG_RAW_INFO("\033[0J");	//clear screen from cursor and to end of screen
 	
 	display_print_line_center_inc("Transferring data:");
+	NRF_LOG_RAW_INFO("Transferring data:\r\n");
 	
-	//print filled bar
-	fb_rectangle((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
-				line_counter*TEXT_HEIGHT + TEXT_HEIGHT/2 + TEXT_START_YPOS, 
-				(FB_UTIL_LCD_WIDTH + TRANSFER_BAR_LENGTH)/2, 
+	if(m_display_connected)
+	{
+		//print filled bar
+		fb_rectangle((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
+					line_counter*TEXT_HEIGHT + TEXT_HEIGHT/2 + TEXT_START_YPOS, 
+					(FB_UTIL_LCD_WIDTH + TRANSFER_BAR_LENGTH)/2, 
+					(line_counter + TRANSFER_BAR_HEIGHT_IN_LINES)*TEXT_HEIGHT + TEXT_START_YPOS + TEXT_HEIGHT/2, 
+					FB_COLOR_BLACK);
+		
+		fb_bar((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
+				line_counter*TEXT_HEIGHT + TEXT_HEIGHT/2 + TEXT_START_YPOS,
+				(FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2 + (uint32_t)(transfer_data->bytes_transfered/1024)*TRANSFER_BAR_LENGTH / transfer_data->kb_transfer_size, 
 				(line_counter + TRANSFER_BAR_HEIGHT_IN_LINES)*TEXT_HEIGHT + TEXT_START_YPOS + TEXT_HEIGHT/2, 
 				FB_COLOR_BLACK);
+		
+		line_counter += TRANSFER_BAR_HEIGHT_IN_LINES + 1;
+	}
 	
-	fb_bar((FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2, 
-			line_counter*TEXT_HEIGHT + TEXT_HEIGHT/2 + TEXT_START_YPOS,
-			(FB_UTIL_LCD_WIDTH - TRANSFER_BAR_LENGTH)/2 + (uint32_t)(transfer_data->bytes_transfered/1024)*TRANSFER_BAR_LENGTH / transfer_data->kb_transfer_size, 
-			(line_counter + TRANSFER_BAR_HEIGHT_IN_LINES)*TEXT_HEIGHT + TEXT_START_YPOS + TEXT_HEIGHT/2, 
-			FB_COLOR_BLACK);
-	
-	line_counter += TRANSFER_BAR_HEIGHT_IN_LINES + 1;
+	NRF_LOG_RAW_INFO("[");
+	for(uint32_t i = 0; i < TERMINAL_TRANSFER_BAR_LENGTH; i++)
+	{
+		if(i < (uint32_t)(transfer_data->bytes_transfered/1024*TERMINAL_TRANSFER_BAR_LENGTH)/transfer_data->kb_transfer_size)
+		{
+			NRF_LOG_RAW_INFO("#");
+		}
+		else
+		{
+			NRF_LOG_RAW_INFO(".");
+		}
+	}
+	NRF_LOG_RAW_INFO("]\r\n");
 	
 	char str[50];
 	sprintf(str, "%dKB/%dKB transferred", transfer_data->bytes_transfered/1024, transfer_data->kb_transfer_size);
 	display_print_line_center_inc(str);
+	NRF_LOG_RAW_INFO("%s\r\n", nrf_log_push(str));
 
 	sprintf(str, "Speed: %.1f Kbits/s", throughput);
 	display_print_line_center_inc(str);
+	NRF_LOG_RAW_INFO("%s\r\n", nrf_log_push(str));
 	
 	sprintf(str, "Link budget: %d", rssi_data->link_budget);
-	//sprintf(str, "RSSI: %d", rssi_data->current_rssi);
 	display_print_line_center_inc(str);
+	NRF_LOG_RAW_INFO("%s\r\n", nrf_log_push(str));
 	
-    if(rssi_data->range_multiplier <= rssi_data->range_multiplier_max)
+	if(rssi_data->range_multiplier <= rssi_data->range_multiplier_max)
     {
         sprintf(str, "Range multiplier: %d", rssi_data->range_multiplier);
     }
@@ -366,16 +394,18 @@ void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *r
         sprintf(str, "Range multiplier: %d+", rssi_data->range_multiplier_max);
     }
 
-    //sprintf(str, "RSSI average: %.f", rssi_data->moving_average);
     display_print_line_center_inc(str);
+	NRF_LOG_RAW_INFO("%s\r\n", nrf_log_push(str));
 	
 	if(transfer_data->last_throughput > 0)
 	{
 		sprintf(str, "Throughput last transfer: %.2f", transfer_data->last_throughput);
 		display_print_line_center_inc(str);
+		NRF_LOG_RAW_INFO("%s\r\n", nrf_log_push(str));
 	}
 		
 	display_print_line_center_inc("Press any key to terminate the test");
+	NRF_LOG_RAW_INFO("Press any key to terminate the test\r\n");
 	
 	display_show();
 }
