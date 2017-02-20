@@ -458,8 +458,9 @@ uint32_t phy_str(uint8_t phy)
 #if defined(S140)
         "125 Kbps",
 #endif
-        "Unknown"
     };
+	
+	char const phy_unkown[] = "Unkown";
 
     switch (phy)
     {
@@ -473,10 +474,8 @@ uint32_t phy_str(uint8_t phy)
         case BLE_GAP_PHY_CODED:
             return (uint32_t)(phy_str[2]);
 #endif
-		
-        default:
-            return (uint32_t)(phy_str[3]);
     }
+	return (uint32_t)phy_unkown;
 }
 
 /**
@@ -1204,7 +1203,6 @@ void test_begin(bool continuous)
     }
 }
 
-    m_rssi_data.range_multiplier_max = 500;
 static bool is_test_ready()
 {
     if (   (m_board_role == BOARD_TESTER)
@@ -1227,8 +1225,6 @@ static void display_timer_handler(void *p_context)
 	m_transfer_data.counter_ticks = counter_get();
 	m_transfer_data.bytes_transfered = m_amts.bytes_sent;
 	m_display_show_transfer_data = true;
-	
-	NRF_LOG_INFO("Transferred " NRF_LOG_FLOAT_MARKER " KB\r\n", NRF_LOG_FLOAT((float)m_transfer_data.bytes_transfered/1000));
 	
 	err_code = sd_ble_gap_rssi_get(m_conn_handle, &rssi);
 	if(err_code == NRF_SUCCESS)
