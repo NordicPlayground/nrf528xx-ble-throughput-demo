@@ -1,14 +1,14 @@
-nRF528xx-ble-demo-bandwidth
+nRF528xx-ble-throughput-demo
 =====================
 Description
 -----------
-This example implements demonstrates the ble bandwidth with different settings including those available in ble 5.0. Settings are MTU packet size, connection interval, on air datarate and data length extension. It is based on the ble_app_att_mtu_throughput in the next SDK. The example can use the display shield or terminal to configure the settings and see the throughput achieved.
+This example implements demonstrates the ble bandwidth with different settings including those available in ble 5.0. Settings are MTU packet size, connection interval, on air datarate and data length extension. It is based on the ble_app_att_mtu_throughput in the next SDK. The example can use the display shield or terminal to configure the settings and see the throughput achieved. A more in depth description can be found in this blogpost: https://devzone.nordicsemi.com/blogs/1078/.
 
 Requirements
 ------------
 - nRF5 SDK version 13
 - nRF52DK (PCA10040) or nRF52840 DK (PCA10056)
-- Display - PCA63520. Not required to run the demo, but the demo works best with this.
+- Terminal program or display shield (developed at Nordic)
  
 The project may need modifications to work with later versions or other boards. 
 
