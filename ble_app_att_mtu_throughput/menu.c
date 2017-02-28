@@ -30,7 +30,6 @@ typedef enum
 
 typedef void (*handler_t)(uint32_t option_index);
 
-//TODO: make pointers point to const values
 typedef struct
 {
 	uint8_t nr_of_options;

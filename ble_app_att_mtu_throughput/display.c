@@ -325,7 +325,6 @@ void display_print_line(char * line, uint32_t x_pos, uint8_t line_nr)
 	}
 }
 
-//TODO: move the log stuff to another function
 void display_draw_test_run_screen(transfer_data_t *transfer_data, rssi_data_t *rssi_data)
 {
 	static uint32_t last_counter_ticks = 0;

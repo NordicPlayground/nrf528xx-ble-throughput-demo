@@ -1149,8 +1149,6 @@ void set_all_parameters(test_params_t *params)
 	amt_byte_transfer_count = params->transfer_data_size * 1024;
 	m_transfer_data.kb_transfer_size = params->transfer_data_size;
 	
-	//TODO: Choose BLE version better (tx power = 8 should be which version for example)
-	
 	switch(params->rxtx_phy)
 	{
 		case BLE_GAP_PHY_2MBPS:
