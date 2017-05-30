@@ -34,15 +34,13 @@ static struct
 } m_drv_vlcd;
 
 
-//uint8_t  static const M_VLCD_NO       = 0x00; //M_VLCD NOP command (used to switch VCOM)
-uint8_t  static const M_VLCD_WR       = 0x01; //M_VLCD write line command
-//uint8_t  static const M_VLCD_CM       = 0x04; //M_VLCD clear memory command
+static const uint8_t M_VLCD_WR       = 0x01; //M_VLCD write line command
 
-uint8_t  static const M_VLCD_PADDING  = 0x00; // Padding
+#define M_VLCD_PADDING   0x00 // Padding
 
-uint8_t  static const M_VLCD_COMMAND_FIELD_LENGTH         = 1;
-uint8_t  static const M_VLCD_LINE_NUMBER_FIELD_LENGTH     = 1;
-uint8_t  static const M_VLCD_SHORT_PADDING_FIELD_LENGTH   = 1;
+#define M_VLCD_COMMAND_FIELD_LENGTH         1
+#define M_VLCD_LINE_NUMBER_FIELD_LENGTH     1
+#define M_VLCD_SHORT_PADDING_FIELD_LENGTH   1
 
 
 static void drv_23lcv_sig_callback(drv_23lcv_signal_type_t drv_23lcv_signal_type);
@@ -379,9 +377,11 @@ uint32_t drv_vlcd_read(uint8_t line_number, uint8_t line_length, uint8_t *p_line
 }
 
 
+#define LINE_LEN  M_VLCD_COMMAND_FIELD_LENGTH + M_VLCD_LINE_NUMBER_FIELD_LENGTH + (VLCD_WIDTH / 8) + (2 * M_VLCD_PADDING)
+
 uint32_t drv_vlcd_clear(drv_vlcd_color_t bg_color)
 {
-    static uint8_t m_one_line_vlcd[M_VLCD_COMMAND_FIELD_LENGTH + M_VLCD_LINE_NUMBER_FIELD_LENGTH + (VLCD_WIDTH / 8) + (2 * M_VLCD_PADDING)];
+    static uint8_t m_one_line_vlcd[LINE_LEN];
     
     drv_disp_engine_access_descr_t * p_access_descr;
     

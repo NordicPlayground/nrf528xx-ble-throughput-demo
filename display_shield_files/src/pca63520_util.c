@@ -129,10 +129,10 @@ void nrf_timer_event_handler(nrf_timer_event_t event_type, void * p_context)
     m_pca63520_util.sync_status.current_total_cycles -= 0x10000;
 }
 
+#define LAST_INDEX 14
 
 static bool m_setup_teardown(int8_t mode)
 {
-    static const int8_t LAST_INDEX = 14;
     uint32_t    ret_val;
     int8_t      i;
     int8_t      delta_i = mode;

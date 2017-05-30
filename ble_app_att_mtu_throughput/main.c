@@ -162,7 +162,7 @@ void scan_start(void);
 void test_params_print(void);
 void display_test_params_print(void);
 uint8_t button_read(void);
-void buttons_enable(void);
+static void buttons_enable(void);
 void buttons_disable(void);
 static void wait_for_event(void);
 
@@ -451,7 +451,7 @@ void amtc_evt_handler(nrf_ble_amtc_t * p_amt_c, nrf_ble_amtc_evt_t * p_evt)
 
 uint32_t phy_str(uint8_t phy)
 {
-    char const * phy_str[] =
+    static char const * phy_str[] =
     {
         "1 Mbps",
         "2 Mbps",
@@ -460,7 +460,7 @@ uint32_t phy_str(uint8_t phy)
 #endif
     };
 	
-	char const phy_unkown[] = "Unkown";
+	static char const phy_unkown[] = "Unkown";
 
     switch (phy)
     {
