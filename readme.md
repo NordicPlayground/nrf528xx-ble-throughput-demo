@@ -6,7 +6,7 @@ This example implements demonstrates the ble bandwidth with different settings i
 
 Requirements
 ------------
-- nRF5 SDK version 13
+- nRF5 SDK version [nRF5_SDK_13.0.0-1.alpha](http://developer.nordicsemi.com/nRF5_SDK/nRF5_SDK_v13.x.x/nRF5_SDK_13.0.0-1.alpha_055eef3.zip)
 - nRF52DK (PCA10040) or nRF52840 DK (PCA10056)
 - Terminal program or display shield (developed at Nordic)
  
